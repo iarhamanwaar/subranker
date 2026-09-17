@@ -83,21 +83,30 @@ export function createApp(config: Config) {
         res,
         200,
         JSON.stringify({
-          ...manifest,
-          id: `${String(manifest.id ?? 'upstream')}.subranker`,
+          // Deliberately NOT spread from the upstream manifest. Doing so leaks
+          // upstream identifiers (an AIOStreams id embeds the user's config
+          // UUID) onto a publicly reachable endpoint, and it would advertise
+          // stream/catalog/meta resources this addon must not serve.
+          id: 'com.subranker',
+          version: '0.1.0',
           name: config.addonName,
           description:
             'Ranks, verifies and relabels subtitles so the best match for the ' +
             'release you are playing is first.',
+          resources: ['subtitles'],
+          types: Array.isArray(manifest.types) ? manifest.types : ['movie', 'series'],
+          idPrefixes: Array.isArray(manifest.idPrefixes) ? manifest.idPrefixes : ['tt', 'kitsu'],
+          catalogs: [],
         }),
       );
     }
 
     const parsed = parseSubtitlePath(pathname);
     if (!parsed) {
-      // Anything that is not a subtitle request is proxied verbatim.
-      const upstream = await fetch(`${config.upstreamBase}${pathname}${url.search}`);
-      return send(res, upstream.status, await upstream.text());
+      // Subtitles only. Proxying other routes would re-serve the upstream's
+      // stream results — which are backed by the operator's paid debrid
+      // account — to anyone who found this host.
+      return send(res, 404, JSON.stringify({ err: 'not found' }));
     }
 
     const key = pathname;
