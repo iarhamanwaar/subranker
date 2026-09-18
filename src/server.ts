@@ -69,6 +69,39 @@ interface CacheEntry {
   body: string;
 }
 
+/**
+ * Cap on cached responses.
+ *
+ * The cache is keyed partly on caller-supplied config, so an unbounded map is
+ * a memory-exhaustion lever: anyone can mint endless distinct keys by varying
+ * their config segment. Oldest entries are evicted first.
+ */
+const MAX_CACHE_ENTRIES = 2000;
+
+/**
+ * Everything about a config that changes the response.
+ *
+ * Keying on the upstreams alone would serve one user's results to another who
+ * shares those upstreams but asked for different processing.
+ */
+function cacheFingerprint(c: Config): string {
+  return [
+    c.upstreamBases.join(','),
+    c.maxResults,
+    c.verify ? 1 : 0,
+    c.verifyLimit,
+    c.dropMismatches ? 1 : 0,
+    c.autoShift ? 1 : 0,
+    c.removeHearingImpaired ? 1 : 0,
+    c.fixUppercase ? 1 : 0,
+    c.fixOcr ? 1 : 0,
+    c.fixOverlaps ? 1 : 0,
+    c.demoteForced ? 1 : 0,
+    c.relabel ? 1 : 0,
+    c.publicUrl,
+  ].join('|');
+}
+
 export function createApp(base: Config) {
   const cache = new Map<string, CacheEntry>();
 
@@ -120,9 +153,9 @@ export function createApp(base: Config) {
     const parsed = parseSubtitlePath(route.rest);
     if (!parsed) return send(res, 404, JSON.stringify({ err: 'not found' }));
 
-    // Keyed on the effective upstreams and rank as well as the path, so two
-    // users with different configs cannot be served each other's results.
-    const key = `${config.upstreamBases.join(',')}|${route.rank ?? 'all'}|${route.rest}`;
+    // Keyed on every setting that changes the output, so two users with
+    // different configs cannot be served each other's results.
+    const key = `${cacheFingerprint(config)}|${route.rank ?? 'all'}|${route.rest}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < config.cacheTtl * 1000) return send(res, 200, hit.body);
 
@@ -160,6 +193,11 @@ export function createApp(base: Config) {
         }),
       );
 
+      if (cache.size >= MAX_CACHE_ENTRIES) {
+        // Map iterates in insertion order, so the first key is the oldest.
+        const oldest = cache.keys().next();
+        if (!oldest.done) cache.delete(oldest.value);
+      }
       cache.set(key, { at: Date.now(), body });
       return send(res, 200, body);
     } catch (err) {

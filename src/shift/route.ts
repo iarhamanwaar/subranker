@@ -7,6 +7,10 @@
  */
 import { applyShift, type Shift } from './rewrite.js';
 import { stripAds } from './ads.js';
+import { isFetchableUrl } from '../net.js';
+
+// Re-exported so existing callers and tests keep a single import site.
+export { isFetchableUrl };
 import { decodeSubtitle } from './encoding.js';
 import { cleanupCues } from './cleanup.js';
 import { fixOverlaps } from './overlap.js';
@@ -54,36 +58,6 @@ export function parseShiftPath(pathname: string): ShiftRequest | null {
   return { offset, rate, url, flags: m[3]! };
 }
 
-/**
- * Only public http(s) URLs may be fetched.
- *
- * This route takes a URL from the request, so without a check it would be an
- * open proxy into anything the server can reach — cloud metadata endpoints and
- * services on the loopback interface included. This box runs unrelated
- * production services, so the check is not optional.
- */
-export function isFetchableUrl(raw: string): boolean {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
-
-  const host = u.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) return false;
-  if (host === '169.254.169.254') return false; // cloud instance metadata
-
-  // Literal private / loopback / link-local addresses.
-  if (/^(127|10)\./.test(host)) return false;
-  if (/^192\.168\./.test(host)) return false;
-  if (/^169\.254\./.test(host)) return false;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-  if (host === '0.0.0.0' || host === '::1' || host.startsWith('[::1')) return false;
-
-  return true;
-}
 
 /** Redirect hops to follow before giving up. */
 const MAX_REDIRECTS = 4;

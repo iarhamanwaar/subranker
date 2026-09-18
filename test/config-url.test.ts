@@ -119,3 +119,26 @@ describe('buildInstallPath', () => {
     expect(parseRoute(p).rank).toBe(2);
   });
 });
+
+describe('upstreams are validated as fetchable', () => {
+  it('rejects a config pointing at the host itself', () => {
+    // The server fetches these on the caller's behalf, so a config segment
+    // would otherwise be an open proxy into the host's own network.
+    for (const u of [
+      'http://127.0.0.1:7010/x',
+      'http://localhost/x',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://10.0.0.5/x',
+      'http://192.168.1.4/x',
+    ]) {
+      expect(decodeUrlConfig(encodeUrlConfig({ upstreams: [u] })), u).toBeNull();
+    }
+  });
+
+  it('keeps the public upstreams when a private one is mixed in', () => {
+    const d = decodeUrlConfig(
+      encodeUrlConfig({ upstreams: ['http://127.0.0.1/x', 'https://ok.example/en'] }),
+    );
+    expect(d!.upstreams).toEqual(['https://ok.example/en']);
+  });
+});

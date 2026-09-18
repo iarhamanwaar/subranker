@@ -11,6 +11,7 @@
  * URL *is* the credential, so it should be treated like one and never shared.
  */
 import type { Config } from './config.js';
+import { isFetchableUrl } from './net.js';
 
 /** The subset of settings a user may carry in their install URL. */
 export interface UrlConfig {
@@ -48,7 +49,10 @@ export function decodeUrlConfig(segment: string): UrlConfig | null {
       ? raw.upstreams
           .filter((u): u is string => typeof u === 'string')
           .map((u) => u.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, ''))
-          .filter((u) => /^https?:\/\//.test(u))
+          // The server fetches these on the caller's behalf, so a config may
+          // not name loopback, private or metadata addresses. Without this the
+          // config segment is an open proxy into the host's own network.
+          .filter((u) => isFetchableUrl(u))
       : [];
     if (upstreams.length === 0) return null;
 
