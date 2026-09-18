@@ -1,0 +1,9 @@
+<CommunityApplications>
+  <Profile>
+    SubRanker is a Stremio subtitle addon that sits in front of the subtitle addons you already use. It ranks their results against the release you are actually playing, drops the dead links, and repairs timing, encoding and overlapping cues.
+
+    It is stateless: no appdata to map, nothing to back up. Support is via GitHub issues.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/iarhamanwaar/subranker/main/docs/icon.png</Icon>
+  <WebPage>https://github.com/iarhamanwaar/subranker</WebPage>
+</CommunityApplications>
