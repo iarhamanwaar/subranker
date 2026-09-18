@@ -190,6 +190,21 @@ picked by mistake — long silences, then one line. Two independent signals are
 used, because neither is reliable alone: the release name, and cue density
 (a 100-minute film with 40 cues is not a dialogue track whatever it is called).
 
+### Capping the list
+
+`MAX_RESULTS` caps per language, not across the whole list, and the distinction
+is not cosmetic. Ranking interleaves languages, so a global cap takes whatever
+scored highest regardless of what the viewer reads. Measured against
+OpenSubtitles v3 with a cap of 6: the six rows came back Spanish, Portuguese,
+Greek, Portuguese, Portuguese, Slovak, and **none of the four English
+candidates survived**.
+
+The consequence is that against an unfiltered upstream, the list is the cap
+multiplied by however many languages that upstream carries. If you want a
+genuinely short list, filter the language at the upstream — most subtitle
+addons take a language in their own configuration, and the setup page asks for
+one when you pick a source that supports it.
+
 ### Several upstreams
 
 `UPSTREAM_BASE` accepts a comma-separated list, queried in parallel and merged,
@@ -329,7 +344,7 @@ it directly is a little faster and guarantees the ordering survives.
 | `VERIFY_TIMEOUT_MS` | `2500` | Per-file download timeout during verification |
 | `AUTO_SHIFT` | `false` | Serve timing-corrected subtitles in place of drifting ones |
 | `DROP_MISMATCHES` | `true` | Remove mismatches instead of ranking them low |
-| `MAX_RESULTS` | `0` | Cap on returned subtitles; `0` means no cap |
+| `MAX_RESULTS` | `0` | Cap on returned subtitles **per language**; `0` means no cap |
 | `REMOVE_HI` | `false` | Strip hearing-impaired annotations and speaker labels |
 | `FIX_UPPERCASE` | `true` | Convert all-capitals files to sentence case |
 | `FIX_OCR` | `true` | Repair `l`/`I` and `rn`/`m` confusion |

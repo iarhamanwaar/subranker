@@ -165,6 +165,39 @@ export interface PipelineResult {
   };
 }
 
+/**
+ * Cap the list per language rather than across the whole list.
+ *
+ * A global cap is wrong as soon as an upstream returns more than one language.
+ * Measured against OpenSubtitles v3 (which is unfiltered) on Interstellar, a
+ * cap of 6 returned Spanish, Portuguese, Greek, Portuguese, Portuguese and
+ * Slovak — none of the four English candidates survived, because the cap was
+ * applied after ranking mixed every language together.
+ *
+ * Capping per language keeps the intent (a short list, because some clients
+ * cannot tell rows apart) without deciding on the viewer's behalf which
+ * language they came for. On a language-filtered upstream there is only one
+ * group, so this behaves exactly as the old global cap did.
+ *
+ * Relative order is preserved, so the ranking still decides what appears
+ * within each language and in what sequence.
+ */
+export function capPerLanguage<T extends { raw: { lang: string } }>(
+  ordered: T[],
+  max: number,
+): T[] {
+  const seen = new Map<string, number>();
+  const kept: T[] = [];
+  for (const c of ordered) {
+    const key = c.raw.lang;
+    const n = seen.get(key) ?? 0;
+    if (n >= max) continue;
+    seen.set(key, n + 1);
+    kept.push(c);
+  }
+  return kept;
+}
+
 export async function runPipeline(
   subs: RawSubtitle[],
   extras: RequestExtras,
@@ -202,7 +235,7 @@ export async function runPipeline(
     ordered = rank(applyTimingScore(checked));
   }
 
-  if (config.maxResults > 0) ordered = ordered.slice(0, config.maxResults);
+  if (config.maxResults > 0) ordered = capPerLanguage(ordered, config.maxResults);
 
   // Auto-shift: alignment already measured what is wrong with the timing, so
   // serve the corrected file rather than leaving the viewer to nudge Delay by
