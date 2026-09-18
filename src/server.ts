@@ -8,6 +8,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig, type Config } from './config.js';
 import { runPipeline } from './pipeline.js';
+import { buildProbeSubtitles } from './label/probe.js';
 import type { RawSubtitle, RequestExtras } from './types.js';
 
 /**
@@ -120,6 +121,12 @@ export function createApp(config: Config) {
       const upstream = await fetch(upstreamUrl);
       const payload = (await upstream.json()) as { subtitles?: RawSubtitle[] };
       const subs = Array.isArray(payload.subtitles) ? payload.subtitles : [];
+
+      if (config.probeLabels) {
+        // Diagnostic: return one row per candidate label format instead of
+        // real results, to find out what this client will render.
+        return send(res, 200, JSON.stringify({ subtitles: buildProbeSubtitles(subs[0]) }));
+      }
 
       const result = await runPipeline(subs, parsed.extras, config);
       const body = JSON.stringify({ subtitles: result.subtitles });

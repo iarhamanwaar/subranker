@@ -25,6 +25,13 @@ export interface Config {
   /** Seconds to keep a computed response. */
   cacheTtl: number;
   addonName: string;
+  /**
+   * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
+   * of real results, so you can see which formats your client actually
+   * renders. Clients differ: Android TV maps `lang` through a language
+   * dictionary and draws an empty row for anything it does not recognise.
+   */
+  probeLabels: boolean;
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -55,5 +62,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     verifyLimit: int(env.VERIFY_LIMIT, 15),
     cacheTtl: int(env.CACHE_TTL, 3600),
     addonName: env.ADDON_NAME ?? 'SubRanker',
+    probeLabels: bool(env.PROBE_LABELS, false),
   };
 }
