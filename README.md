@@ -227,8 +227,12 @@ per-subtitle `label` field, so a list of six results shows six identical rows.
 Measured on Stremio Android TV 1.10.4: embedded tracks from the video file do
 render their own names ("Full Subtitles", "Signs & Songs"), so the capability
 exists — it simply is not wired to `label` for addon-supplied tracks
-([stremio-core#907](https://github.com/Stremio/stremio-core/issues/907) tracks
-this).
+([stremio-core#936](https://github.com/Stremio/stremio-core/issues/936) is the
+dedicated request to render `label`; [#907](https://github.com/Stremio/stremio-core/issues/907)
+asks for the same outcome via filenames). The Android TV measurements above are
+posted on #936, including the finding that the `lang` free-text workaround
+which works on desktop does not work there, so on that client there is no
+workaround at all.
 
 Until that changes, the only way to get distinguishable rows is for them to
 come from different addons. The configure page can emit one install link per
