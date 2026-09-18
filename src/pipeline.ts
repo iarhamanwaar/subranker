@@ -95,12 +95,19 @@ export function consensusTimeline(timelines: Timeline[]): Consensus {
  * Download the top candidates, drop the dead ones and measure how well the rest
  * line up against the consensus timeline.
  */
-async function verifyTop(candidates: Candidate[], limit: number): Promise<Candidate[]> {
+async function verifyTop(
+  candidates: Candidate[],
+  limit: number,
+  timeoutMs: number,
+): Promise<Candidate[]> {
   const top = candidates.slice(0, limit);
   const rest = candidates.slice(limit);
 
   const fetched = await Promise.all(
-    top.map(async (c) => ({ c, result: await fetchAndInspect(c.raw.url, DEFAULT_FETCH_OPTIONS) })),
+    top.map(async (c) => ({
+      c,
+      result: await fetchAndInspect(c.raw.url, { ...DEFAULT_FETCH_OPTIONS, timeoutMs }),
+    })),
   );
 
   const alive = fetched.filter((f) => f.result.verification.ok);
@@ -174,7 +181,7 @@ export async function runPipeline(
   let ordered = rank(scored);
 
   if (config.verify && ordered.length > 0) {
-    let checked = await verifyTop(ordered, config.verifyLimit);
+    let checked = await verifyTop(ordered, config.verifyLimit, config.verifyTimeoutMs);
 
     if (config.demoteForced) {
       // A forced track covers signs only. It is not wrong, it is simply not

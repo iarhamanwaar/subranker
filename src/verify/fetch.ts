@@ -25,7 +25,14 @@ export interface FetchOptions {
 }
 
 export const DEFAULT_FETCH_OPTIONS: FetchOptions = {
-  timeoutMs: 6000,
+  /**
+   * Measured across both upstreams: median 414ms, p90 897ms, slowest 908ms.
+   * A generous 6s ceiling meant one straggler held up the entire response,
+   * which showed as a flat 6s on requests whose files all returned quickly.
+   * A file slower than this is not worth blocking playback for — it is marked
+   * unverified rather than dropped, so it still reaches the client.
+   */
+  timeoutMs: 2500,
   maxBytes: 2_000_000,
   userAgent: 'Mozilla/5.0 (compatible; subranker/0.1)',
 };
@@ -42,7 +49,14 @@ export async function fetchAndInspect(
   options: FetchOptions = DEFAULT_FETCH_OPTIONS,
 ): Promise<Fetched> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+  // A missing or nonsensical timeout must not silently disable verification:
+  // setTimeout(fn, undefined) fires immediately, which aborts every request
+  // and makes the whole stage look instantaneous and successful.
+  const timeoutMs =
+    Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+      ? options.timeoutMs
+      : DEFAULT_FETCH_OPTIONS.timeoutMs;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {

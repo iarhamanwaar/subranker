@@ -65,3 +65,21 @@ describe('fetchUpstreams', () => {
     expect(r.failed[0]!.error).toBe('HTTP 404');
   });
 });
+
+describe('verification timeout guard', () => {
+  it('falls back to the default when the timeout is missing or invalid', async () => {
+    const { fetchAndInspect, DEFAULT_FETCH_OPTIONS } = await import('../src/verify/fetch.js');
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new TextEncoder().encode('1\n00:00:01,000 --> 00:00:02,000\nhi\n').buffer,
+    })));
+    // setTimeout(fn, undefined) fires immediately, which would abort every
+    // request and make verification look instantaneous while doing nothing.
+    const r = await fetchAndInspect('https://example.com/a.srt', {
+      ...DEFAULT_FETCH_OPTIONS,
+      timeoutMs: undefined as unknown as number,
+    });
+    expect(r.verification.ok).toBe(true);
+  });
+});

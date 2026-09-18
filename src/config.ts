@@ -26,6 +26,8 @@ export interface Config {
   verify: boolean;
   /** How many candidates to download per request. */
   verifyLimit: number;
+  /** Per-file download timeout during verification, in milliseconds. */
+  verifyTimeoutMs: number;
   /** Seconds to keep a computed response. */
   cacheTtl: number;
   /**
@@ -112,6 +114,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dropMismatches: bool(env.DROP_MISMATCHES, true),
     verify: bool(env.VERIFY, true),
     verifyLimit: int(env.VERIFY_LIMIT, 15),
+    verifyTimeoutMs: int(env.VERIFY_TIMEOUT_MS, 2500),
     cacheTtl: int(env.CACHE_TTL, 3600),
     maxResults: Number(env.MAX_RESULTS ?? 0) || 0,
     publicUrl: (env.PUBLIC_URL ?? '').replace(/\/+$/, ''),

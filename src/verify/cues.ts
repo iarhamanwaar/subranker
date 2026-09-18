@@ -121,12 +121,21 @@ export function align(
 
   for (const rate of rates) {
     const hist = new Map<number, number>();
+    // Both timelines are sorted, so the reference cues within +/-MAX_OFFSET of
+    // a given candidate cue form a contiguous run. Walking that window with
+    // two pointers replaces the full cross product: with a 30s window over a
+    // 1400s timeline it touches a handful of cues per candidate instead of
+    // several hundred, which is the difference between this taking seconds and
+    // taking milliseconds.
+    let lo = 0;
+    let hi = 0;
     for (const a of candidate) {
       const scaled = a * rate;
-      for (const b of reference) {
-        const d = b - scaled;
-        if (d < -MAX_OFFSET || d > MAX_OFFSET) continue;
-        const bin = Math.round(d / BIN);
+      while (lo < reference.length && reference[lo]! < scaled - MAX_OFFSET) lo += 1;
+      if (hi < lo) hi = lo;
+      while (hi < reference.length && reference[hi]! <= scaled + MAX_OFFSET) hi += 1;
+      for (let i = lo; i < hi; i++) {
+        const bin = Math.round((reference[i]! - scaled) / BIN);
         hist.set(bin, (hist.get(bin) ?? 0) + 1);
       }
     }

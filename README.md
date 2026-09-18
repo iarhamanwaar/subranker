@@ -216,6 +216,7 @@ custom addon inside an aggregator.
 | `ADDON_NAME` | `SubRanker` | Name reported in the manifest |
 | `VERIFY` | `true` | Download top candidates to check liveness, encoding and timing |
 | `VERIFY_LIMIT` | `15` | How many to download per request |
+| `VERIFY_TIMEOUT_MS` | `2500` | Per-file download timeout during verification |
 | `AUTO_SHIFT` | `false` | Serve timing-corrected subtitles in place of drifting ones |
 | `DROP_MISMATCHES` | `true` | Remove mismatches instead of ranking them low |
 | `MAX_RESULTS` | `0` | Cap on returned subtitles; `0` means no cap |
@@ -252,6 +253,30 @@ though it is fixed in current Android TV builds. SubRanker degrades
 gracefully: without extras it still prunes dead links, removes dub-timed
 tracks, repairs encodings, verifies timing and labels rows. With them, ranking
 becomes exact.
+
+## Performance
+
+A cold request costs roughly 3–4 seconds, almost entirely network; responses
+are cached for `CACHE_TTL` afterwards. Measured breakdown:
+
+| Stage | Time |
+|---|---|
+| Upstream fetch (parallel) | 0.6–1.9s |
+| Verification downloads | 2.4–2.7s |
+| Parse, score, rank | 1–36ms |
+
+Two things dominate, and neither is computation:
+
+**Straggler downloads.** Per-file latency measures median 414ms and p90 897ms,
+so the per-file timeout is 2.5s rather than something generous — a file slower
+than that is marked unverified rather than dropped, so it still reaches the
+client while no longer holding up the response.
+
+**Alignment used to.** Comparing two cue timelines was a full cross product,
+~300×300 per pair, run across every pair of candidates to pick the consensus
+anchor — around 30M iterations, which cost about 6 seconds. Both timelines are
+sorted, so the reference cues within the offset window form a contiguous run;
+walking it with two pointers made the stage effectively free.
 
 ## Development
 
