@@ -8,7 +8,7 @@ import { applyTimingScore, rank, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect, withAlignment } from './verify/fetch.js';
 import { align, isTrustworthy, type Timeline } from './verify/cues.js';
-import { isShiftWorthApplying } from './shift/rewrite.js';
+import { isShiftSafeToApply } from './shift/rewrite.js';
 import { buildShiftPath, isFetchableUrl } from './shift/route.js';
 
 /** Best human-readable release string available for a candidate. */
@@ -56,7 +56,11 @@ export function consensusTimeline(timelines: Timeline[]): Timeline {
     let total = 0;
     for (const other of usable) {
       if (other === candidate) continue;
-      total += align(other, candidate).agreement;
+      // Judged at rate 1 with a tight offset window on purpose. Scoring the
+      // medoid on a fully-maximised alignment lets a pathological timeline
+      // "agree" with everything by stretching itself, and it then wins the
+      // vote — which is exactly how a bogus +176s/1.042 reference got chosen.
+      total += align(other, candidate, { rates: [1], maxOffset: 30 }).agreement;
     }
     if (total > bestTotal) {
       bestTotal = total;
@@ -159,7 +163,7 @@ export async function runPipeline(
       const v = c.verification;
       if (!v?.ok || v.offset === undefined || v.rate === undefined) return c;
       const shift = { offset: v.offset, rate: v.rate };
-      if (!isShiftWorthApplying(shift) || !isFetchableUrl(c.raw.url)) return c;
+      if (!isShiftSafeToApply(shift, v.agreement) || !isFetchableUrl(c.raw.url)) return c;
       return {
         ...c,
         raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...shift, url: c.raw.url })}` },

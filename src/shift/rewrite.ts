@@ -27,6 +27,33 @@ export function isShiftWorthApplying({ offset, rate }: Shift): boolean {
   return Math.abs(offset) >= MIN_SHIFT_SECONDS || Math.abs(rate - 1) >= MIN_RATE_DEVIATION;
 }
 
+/**
+ * Largest offset still treated as a fixable lag.
+ *
+ * Beyond this the two files are not the same cut — a different edit, or an
+ * opening/recap present in one and not the other — and sliding the whole
+ * timeline would not make them match, it would only hide that fact. Measured
+ * on real data: honest corrections land within a few seconds, while a
+ * mismatched cut produced a 134-second "fix".
+ */
+export const MAX_APPLY_OFFSET_SECONDS = 30;
+
+/** Minimum agreement before a measured shift is trusted enough to apply. */
+export const MIN_APPLY_AGREEMENT = 0.5;
+
+/**
+ * Whether a measured shift should actually be applied to the file.
+ *
+ * Deliberately stricter than `isShiftWorthApplying`: that asks "is this
+ * non-trivial", this asks "do we believe it".
+ */
+export function isShiftSafeToApply(shift: Shift, agreement: number | undefined): boolean {
+  if (!isShiftWorthApplying(shift)) return false;
+  if (Math.abs(shift.offset) > MAX_APPLY_OFFSET_SECONDS) return false;
+  if (agreement === undefined || agreement < MIN_APPLY_AGREEMENT) return false;
+  return true;
+}
+
 function clamp(seconds: number): number {
   return seconds < 0 ? 0 : seconds;
 }

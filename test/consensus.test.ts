@@ -56,3 +56,23 @@ describe('applyTimingScore', () => {
     expect(c!.reasons).toHaveLength(0);
   });
 });
+
+describe('regression: spurious rate hypotheses', () => {
+  it('does not invent a framerate drift for two well-aligned timelines', async () => {
+    const { align } = await import('../src/verify/cues.js');
+    const ref = Array.from({ length: 300 }, (_, i) => 25 + i * 4.1);
+    const candidate = ref.map((t) => t + 0.25);
+    const a = align(candidate, ref);
+    // A 4.2% stretch can manufacture coincidences; it must not beat the truth.
+    expect(a.rate).toBe(1);
+    expect(Math.abs(a.offset)).toBeLessThan(1);
+  });
+
+  it('picks a sane reference even when an outlier is listed first', async () => {
+    const good = Array.from({ length: 200 }, (_, i) => 25 + i * 6.7);
+    // An outlier that a maximising aligner could warp into "agreeing" with all.
+    const outlier = good.map((t) => t * 1.042 + 176.5);
+    const ref = consensusTimeline([outlier, good, good.map((t) => t + 0.2), good.map((t) => t - 0.1)]);
+    expect(ref).not.toBe(outlier);
+  });
+});

@@ -89,15 +89,37 @@ export interface Alignment {
  * This tolerates the two timelines having quite different cue counts, which is
  * normal when one is SDH and the other is not.
  */
-export function align(candidate: Timeline, reference: Timeline): Alignment {
+export interface AlignOptions {
+  /** Ignore hypotheses that shift further than this, in seconds. */
+  maxOffset?: number;
+  /** Restrict the framerate ratios considered. */
+  rates?: readonly number[];
+  /**
+   * How much better a non-1 rate must score before it is preferred.
+   *
+   * Rate scaling is powerful enough to manufacture coincidences: stretching a
+   * timeline by 4.2% can line up unrelated cues well enough to beat the truth.
+   * Requiring a clear margin keeps `rate` at 1 unless drift is real.
+   */
+  rateMargin?: number;
+}
+
+export function align(
+  candidate: Timeline,
+  reference: Timeline,
+  options: AlignOptions = {},
+): Alignment {
   const empty: Alignment = { offset: 0, rate: 1, agreement: 0 };
   if (candidate.length < 5 || reference.length < 5) return empty;
 
   const BIN = 0.25; // seconds
-  const MAX_OFFSET = 180; // ignore pairs further apart than this
+  const MAX_OFFSET = options.maxOffset ?? 180;
+  const rates = options.rates ?? RATE_CANDIDATES;
+  const rateMargin = options.rateMargin ?? 0.08;
   let best = empty;
+  let identityAgreement = 0;
 
-  for (const rate of RATE_CANDIDATES) {
+  for (const rate of rates) {
     const hist = new Map<number, number>();
     for (const a of candidate) {
       const scaled = a * rate;
@@ -109,11 +131,22 @@ export function align(candidate: Timeline, reference: Timeline): Alignment {
       }
     }
     for (const [bin, count] of hist) {
-      const agreement = count / Math.min(candidate.length, reference.length);
+      const agreement = Math.min(count / Math.min(candidate.length, reference.length), 1);
+      if (rate === 1 && agreement > identityAgreement) identityAgreement = agreement;
       if (agreement > best.agreement) {
-        best = { offset: bin * BIN, rate, agreement: Math.min(agreement, 1) };
+        best = { offset: bin * BIN, rate, agreement };
       }
     }
+  }
+
+  // Fall back to the identity rate unless the drift hypothesis is clearly
+  // better; otherwise a manufactured stretch wins over the honest answer.
+  if (best.rate !== 1 && best.agreement - identityAgreement < rateMargin) {
+    return align(candidate, reference, {
+      ...options,
+      rates: [1],
+      rateMargin: Number.POSITIVE_INFINITY,
+    });
   }
 
   return best;

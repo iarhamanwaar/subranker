@@ -78,18 +78,40 @@ export function isFetchableUrl(raw: string): boolean {
   return true;
 }
 
+/** Redirect hops to follow before giving up. */
+const MAX_REDIRECTS = 4;
+
 export async function fetchShifted(req: ShiftRequest, timeoutMs = 8000): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(req.url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; subranker/0.1)' },
-    });
-    if (!res.ok) return null;
-    const text = await res.text();
-    return applyShift(text, { offset: req.offset, rate: req.rate });
+    let url = req.url;
+
+    // Redirects are followed manually and every hop is re-validated. Letting
+    // fetch follow them would defeat the check on the initial URL: a public
+    // host can redirect to 127.0.0.1 or the cloud metadata endpoint, and the
+    // response body would be handed straight back to the caller.
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      if (!isFetchableUrl(url)) return null;
+
+      const res = await fetch(url, {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; subranker/0.1)' },
+      });
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) return null;
+        url = new URL(location, url).toString();
+        continue;
+      }
+
+      if (!res.ok) return null;
+      const text = await res.text();
+      return applyShift(text, { offset: req.offset, rate: req.rate });
+    }
+    return null;
   } catch {
     return null;
   } finally {

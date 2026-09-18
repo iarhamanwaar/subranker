@@ -75,3 +75,21 @@ describe('isShiftWorthApplying', () => {
     expect(isShiftWorthApplying({ offset: 0, rate: 25 / 23.976 })).toBe(true);
   });
 });
+
+describe('isShiftSafeToApply', () => {
+  it('applies a believable correction', async () => {
+    const { isShiftSafeToApply } = await import('../src/shift/rewrite.js');
+    expect(isShiftSafeToApply({ offset: 2.5, rate: 1 }, 0.8)).toBe(true);
+  });
+
+  it('refuses a huge offset: that is a different cut, not a lag', async () => {
+    const { isShiftSafeToApply } = await import('../src/shift/rewrite.js');
+    expect(isShiftSafeToApply({ offset: -134, rate: 1 }, 0.9)).toBe(false);
+  });
+
+  it('refuses a shift measured from weak agreement', async () => {
+    const { isShiftSafeToApply } = await import('../src/shift/rewrite.js');
+    expect(isShiftSafeToApply({ offset: 2.5, rate: 1 }, 0.2)).toBe(false);
+    expect(isShiftSafeToApply({ offset: 2.5, rate: 1 }, undefined)).toBe(false);
+  });
+});
