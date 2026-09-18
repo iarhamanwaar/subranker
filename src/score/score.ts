@@ -26,6 +26,26 @@ export const HASH_WEIGHT =
 /** Applied only when at least one non-SDH candidate survives. */
 export const SDH_PENALTY = 25;
 
+/**
+ * Maximum bonus awarded for agreeing with the consensus timeline.
+ *
+ * This is the fallback evidence when the release name carries no group. Players
+ * are often fed library-renamed files — `Demon Slayer - S01E01 - Cruelty
+ * Bluray-1080p.mkv` names the source and resolution but no release group — and
+ * in that case the group weight can never fire. Measured timing agreement is
+ * then the strongest signal available, so it is weighted just below a group
+ * match rather than as a tiebreaker.
+ */
+export const TIMING_BONUS = 34;
+
+/**
+ * Redistribution applied when the target names no release group.
+ *
+ * The group weight is dead in that case, so the remaining name-derived
+ * properties are worth proportionally more.
+ */
+const NO_GROUP_MULTIPLIER = 1.6;
+
 export interface ScoreOptions {
   /** Preference for the original audio with translated subtitles. */
   preferSubbed: boolean;
@@ -89,19 +109,23 @@ export function scoreCandidate(
     reasons.push('exact file match');
   }
 
+  // With no group on the target, the group weight can never fire, so the other
+  // name-derived properties carry the decision.
+  const boost = target.group ? 1 : NO_GROUP_MULTIPLIER;
+
   if (target.group && p.group && target.group === p.group) {
     score += WEIGHTS.group;
     reasons.push(p.group);
   }
   if (target.source && p.source && target.source === p.source) {
-    score += WEIGHTS.source;
+    score += WEIGHTS.source * boost;
     reasons.push(p.source.toUpperCase());
   }
   if (target.resolution && p.resolution && target.resolution === p.resolution) {
-    score += WEIGHTS.resolution;
+    score += WEIGHTS.resolution * boost;
   }
   if (target.videoCodec && p.videoCodec && target.videoCodec === p.videoCodec) {
-    score += WEIGHTS.videoCodec;
+    score += WEIGHTS.videoCodec * boost;
   }
   if (target.episode !== undefined && p.episode === target.episode) {
     score += WEIGHTS.episode;
@@ -151,6 +175,25 @@ export function scoreAll(
   }
 
   return scored;
+}
+
+/**
+ * Fold measured timing agreement into the score.
+ *
+ * Call this after verification. Agreement with the consensus timeline is
+ * evidence the subtitle is cut for the same video, which matters most when the
+ * release name gave us nothing to match on.
+ */
+export function applyTimingScore(candidates: Candidate[]): Candidate[] {
+  return candidates.map((c) => {
+    const a = c.verification?.agreement;
+    if (!c.verification?.ok || a === undefined) return c;
+
+    const bonus = Math.round(TIMING_BONUS * Math.min(Math.max(a, 0), 1));
+    const reasons = [...c.reasons];
+    if (a >= 0.6) reasons.push('timing confirmed');
+    return { ...c, score: c.score + bonus, reasons };
+  });
 }
 
 /** Rank survivors best-first; dropped candidates are excluded. */

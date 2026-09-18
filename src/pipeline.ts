@@ -4,10 +4,10 @@
 import type { Config } from './config.js';
 import { buildLabel } from './label/label.js';
 import { parseRelease } from './parse/release.js';
-import { rank, scoreAll } from './score/score.js';
+import { applyTimingScore, rank, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect, withAlignment } from './verify/fetch.js';
-import { isTrustworthy, type Timeline } from './verify/cues.js';
+import { align, isTrustworthy, type Timeline } from './verify/cues.js';
 
 /** Best human-readable release string available for a candidate. */
 export function releaseTextOf(raw: RawSubtitle): string {
@@ -34,12 +34,39 @@ export async function buildCandidates(subs: RawSubtitle[]): Promise<Candidate[]>
 }
 
 /**
- * Download the top candidates, drop the dead ones and measure how well the rest
- * line up.
+ * Pick the timeline that the most other timelines agree with.
  *
- * The reference timeline is the highest-scoring candidate that downloaded
- * cleanly — by that point it is the one most likely to be cut for this exact
- * release, which makes it a better anchor than any single provider.
+ * Using the highest-scoring candidate as the anchor is circular: when the
+ * release name carries no group, the top score is close to arbitrary, and
+ * anchoring on a badly-timed file would then punish every correctly-timed one.
+ * The medoid — the timeline with the best total agreement against the rest — is
+ * the one the majority of independent uploaders converged on, which is a far
+ * better estimate of the video's real timing.
+ */
+export function consensusTimeline(timelines: Timeline[]): Timeline {
+  const usable = timelines.filter((t) => t.length >= 5);
+  if (usable.length === 0) return timelines[0] ?? [];
+  if (usable.length <= 2) return usable[0]!;
+
+  let best = usable[0]!;
+  let bestTotal = -1;
+  for (const candidate of usable) {
+    let total = 0;
+    for (const other of usable) {
+      if (other === candidate) continue;
+      total += align(other, candidate).agreement;
+    }
+    if (total > bestTotal) {
+      bestTotal = total;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/**
+ * Download the top candidates, drop the dead ones and measure how well the rest
+ * line up against the consensus timeline.
  */
 async function verifyTop(candidates: Candidate[], limit: number): Promise<Candidate[]> {
   const top = candidates.slice(0, limit);
@@ -50,7 +77,7 @@ async function verifyTop(candidates: Candidate[], limit: number): Promise<Candid
   );
 
   const alive = fetched.filter((f) => f.result.verification.ok);
-  const reference: Timeline = alive[0]?.result.timeline ?? [];
+  const reference: Timeline = consensusTimeline(alive.map((f) => f.result.timeline));
 
   const verified: Candidate[] = [];
   for (const { c, result } of fetched) {
@@ -115,7 +142,7 @@ export async function runPipeline(
 
   if (config.verify && ordered.length > 0) {
     const checked = await verifyTop(ordered, config.verifyLimit);
-    ordered = rank(checked);
+    ordered = rank(applyTimingScore(checked));
   }
 
   const subtitles = ordered.map((c, i) => ({
