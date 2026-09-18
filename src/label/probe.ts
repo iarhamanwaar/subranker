@@ -19,15 +19,18 @@ import type { RawSubtitle } from '../types.js';
  */
 export const PROBE_FORMATS: string[] = [
   'eng', // control: the standard ISO 639-2 code
-  'en', // ISO 639-1
-  'English', // full English name
-  'English [Erai-raws]', // name + bracketed suffix
-  'eng [Erai-raws]', // code + bracketed suffix
-  'English - Erai-raws', // name + dash suffix
-  'English (in sync)', // name + parenthetical
-  'eng.Erai-raws', // code + dotted suffix
-  'Erai-raws', // bare descriptive text, no language at all
-  'English · Erai-raws · in sync', // the format RELABEL produces today
+  'English', // control: the full name
+  // AIOStreams' own error entries use this shape (`transformers/stremio.ts`
+  // emits `[❌] <title> - <description>`), so it is the existence proof that
+  // some descriptive strings do reach the screen.
+  '[❌] Erai-raws - in sync',
+  'English - Erai-raws', // name first, so a prefix match can still classify it
+  'English Erai-raws',
+  'English/Erai-raws',
+  'English|Erai-raws',
+  'eng;Erai-raws',
+  'Erai-raws (English)', // name last
+  'en-Erai-raws', // BCP-47 shaped
 ];
 
 /**
