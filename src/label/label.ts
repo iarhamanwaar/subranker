@@ -84,16 +84,30 @@ export function buildLabel(c: Candidate, index: number, total: number): string {
  * a per-subtitle description can be put without the language column breaking.
  */
 export function buildRowLabel(c: Candidate, index: number, total: number): string {
-  const parts: string[] = [];
   const width = String(total).length;
-  parts.push(`${String(index + 1).padStart(width, '0')}.`);
+  const rank = `${String(index + 1).padStart(width, '0')}.`;
 
-  const reasons = c.reasons.filter((r) => r !== 'SDH');
-  if (reasons.length > 0) parts.push(reasons.slice(0, 3).join(' · '));
-  else if (c.parsed.group) parts.push(c.parsed.group);
-  else if (c.parsed.source) parts.push(c.parsed.source.toUpperCase());
-  else if (c.raw.source) parts.push(String(c.raw.source));
+  // Identity first: which release is this? That is what distinguishes one row
+  // from another. Process notes ("ads removed") are useful but secondary, and
+  // the row is narrow, so they only appear if there is space left.
+  const identity: string[] = [];
+  if (c.parsed.group) identity.push(c.parsed.group);
+  if (c.parsed.source) identity.push(c.parsed.source.toUpperCase());
+  if (c.parsed.resolution) identity.push(c.parsed.resolution);
+  if (identity.length === 0 && c.raw.source) identity.push(String(c.raw.source));
+  if (identity.length === 0) identity.push('unknown release');
 
-  if (c.parsed.sdh) parts.push('SDH');
-  return parts.join(' ');
+  const notes: string[] = [];
+  if (c.reasons.includes('exact file match')) notes.unshift('exact match');
+  if (c.parsed.sdh) notes.push('SDH');
+  if (c.verification?.rate !== undefined && Math.abs(c.verification.rate - 1) > 0.005) {
+    notes.push('drift fixed');
+  } else if (c.reasons.includes('timing corrected')) {
+    notes.push('sync fixed');
+  } else if (c.reasons.includes('timing confirmed')) {
+    notes.push('in sync');
+  }
+
+  const tail = notes.length > 0 ? ` (${notes.join(', ')})` : '';
+  return `${rank} ${identity.join(' ')}${tail}`;
 }
