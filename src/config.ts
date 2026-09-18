@@ -24,6 +24,17 @@ export interface Config {
   verifyLimit: number;
   /** Seconds to keep a computed response. */
   cacheTtl: number;
+  /**
+   * Cap on returned subtitles; 0 means no cap.
+   *
+   * Some clients cannot show anything per-subtitle: the Android TV picker
+   * labels every row with the addon's name, and both AIOStreams and the client
+   * normalise `lang`, so a descriptive label never survives. When rows are
+   * indistinguishable, a long list is worse than a short one — the only useful
+   * signal left is position, so returning a handful of well-ranked candidates
+   * beats returning forty identical ones.
+   */
+  maxResults: number;
   addonName: string;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
@@ -61,6 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     verify: bool(env.VERIFY, true),
     verifyLimit: int(env.VERIFY_LIMIT, 15),
     cacheTtl: int(env.CACHE_TTL, 3600),
+    maxResults: Number(env.MAX_RESULTS ?? 0) || 0,
     addonName: env.ADDON_NAME ?? 'SubRanker',
     probeLabels: bool(env.PROBE_LABELS, false),
   };

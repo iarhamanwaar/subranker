@@ -145,6 +145,8 @@ export async function runPipeline(
     ordered = rank(applyTimingScore(checked));
   }
 
+  if (config.maxResults > 0) ordered = ordered.slice(0, config.maxResults);
+
   const subtitles = ordered.map((c, i) => ({
     id: c.raw.id,
     url: c.raw.url,
