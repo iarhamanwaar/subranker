@@ -6,6 +6,7 @@
  * rather than in server state so the route stays stateless and cacheable.
  */
 import { applyShift, type Shift } from './rewrite.js';
+import { stripAds } from './ads.js';
 
 export interface ShiftRequest extends Shift {
   url: string;
@@ -109,7 +110,10 @@ export async function fetchShifted(req: ShiftRequest, timeoutMs = 8000): Promise
 
       if (!res.ok) return null;
       const text = await res.text();
-      return applyShift(text, { offset: req.offset, rate: req.rate });
+      // Banners are removed before shifting: they sit outside the real
+      // timeline, so dropping them first keeps the cue numbering clean.
+      const cleaned = stripAds(text).content;
+      return applyShift(cleaned, { offset: req.offset, rate: req.rate });
     }
     return null;
   } catch {

@@ -10,6 +10,7 @@
  */
 import type { Verification } from '../types.js';
 import { align, parseTimeline, type Timeline } from './cues.js';
+import { stripAds } from '../shift/ads.js';
 
 /** Statuses that indicate the server refused us specifically, not a dead link. */
 const IP_BLOCK_STATUSES = new Set([401, 403, 429]);
@@ -89,6 +90,9 @@ export async function fetchAndInspect(
         cueCount: timeline.length,
         firstCue: timeline[0],
         lastCue: timeline[timeline.length - 1],
+        // Counted here because we already hold the content; re-downloading
+        // later just to look for banners would double every request.
+        adCues: stripAds(text).removed,
       },
       timeline,
       blocked: false,

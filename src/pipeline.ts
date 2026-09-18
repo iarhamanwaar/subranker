@@ -45,29 +45,49 @@ export async function buildCandidates(subs: RawSubtitle[]): Promise<Candidate[]>
  * the one the majority of independent uploaders converged on, which is a far
  * better estimate of the video's real timing.
  */
-export function consensusTimeline(timelines: Timeline[]): Timeline {
+export interface Consensus {
+  reference: Timeline;
+  /**
+   * Fraction of the other timelines that agree with the reference.
+   *
+   * This is the anchor's own trustworthiness. If most uploaders disagree with
+   * the chosen reference there is no consensus to speak of, and any offset
+   * measured against it is meaningless — which is exactly how a bogus
+   * +176s/1.042 "correction" was once produced for every candidate.
+   */
+  support: number;
+}
+
+/** Agreement above which two timelines are considered to be the same cut. */
+const SAME_CUT_AGREEMENT = 0.5;
+
+export function consensusTimeline(timelines: Timeline[]): Consensus {
   const usable = timelines.filter((t) => t.length >= 5);
-  if (usable.length === 0) return timelines[0] ?? [];
-  if (usable.length <= 2) return usable[0]!;
+  if (usable.length === 0) return { reference: timelines[0] ?? [], support: 0 };
+  if (usable.length === 1) return { reference: usable[0]!, support: 1 };
 
   let best = usable[0]!;
-  let bestTotal = -1;
+  let bestSupport = -1;
+
   for (const candidate of usable) {
-    let total = 0;
+    let agreeing = 0;
     for (const other of usable) {
       if (other === candidate) continue;
       // Judged at rate 1 with a tight offset window on purpose. Scoring the
       // medoid on a fully-maximised alignment lets a pathological timeline
       // "agree" with everything by stretching itself, and it then wins the
-      // vote — which is exactly how a bogus +176s/1.042 reference got chosen.
-      total += align(other, candidate, { rates: [1], maxOffset: 30 }).agreement;
+      // vote.
+      const a = align(other, candidate, { rates: [1], maxOffset: 30 });
+      if (a.agreement >= SAME_CUT_AGREEMENT) agreeing += 1;
     }
-    if (total > bestTotal) {
-      bestTotal = total;
+    const support = agreeing / (usable.length - 1);
+    if (support > bestSupport) {
+      bestSupport = support;
       best = candidate;
     }
   }
-  return best;
+
+  return { reference: best, support: Math.max(bestSupport, 0) };
 }
 
 /**
@@ -83,12 +103,18 @@ async function verifyTop(candidates: Candidate[], limit: number): Promise<Candid
   );
 
   const alive = fetched.filter((f) => f.result.verification.ok);
-  const reference: Timeline = consensusTimeline(alive.map((f) => f.result.timeline));
+  const { reference, support } = consensusTimeline(alive.map((f) => f.result.timeline));
+
+  // With no majority behind the anchor there is nothing to measure against, so
+  // report timings as unknown rather than inventing corrections from noise.
+  const anchored = support >= 0.5;
 
   const verified: Candidate[] = [];
   for (const { c, result } of fetched) {
     if (result.verification.ok) {
-      const verification = withAlignment(result.verification, result.timeline, reference);
+      const verification = anchored
+        ? withAlignment(result.verification, result.timeline, reference)
+        : result.verification;
       const next: Candidate = { ...c, verification };
 
       if (
@@ -163,11 +189,19 @@ export async function runPipeline(
       const v = c.verification;
       if (!v?.ok || v.offset === undefined || v.rate === undefined) return c;
       const shift = { offset: v.offset, rate: v.rate };
-      if (!isShiftSafeToApply(shift, v.agreement) || !isFetchableUrl(c.raw.url)) return c;
+      const needsShift = isShiftSafeToApply(shift, v.agreement);
+      const hasAds = (v.adCues ?? 0) > 0;
+      if ((!needsShift && !hasAds) || !isFetchableUrl(c.raw.url)) return c;
+
+      // A file with banners is worth proxying even when its timing is fine.
+      const applied = needsShift ? shift : { offset: 0, rate: 1 };
+      const reasons = [...c.reasons];
+      if (needsShift) reasons.push('timing corrected');
+      if (hasAds) reasons.push('ads removed');
       return {
         ...c,
-        raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...shift, url: c.raw.url })}` },
-        reasons: [...c.reasons, 'timing corrected'],
+        raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...applied, url: c.raw.url })}` },
+        reasons,
       };
     });
   }

@@ -90,4 +90,6 @@ export interface Verification {
   rate?: number;
   /** Fraction of cues that line up with the reference after alignment. */
   agreement?: number;
+  /** Promotional cues detected in the file. */
+  adCues?: number;
 }

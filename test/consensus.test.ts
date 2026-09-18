@@ -24,16 +24,16 @@ describe('consensusTimeline', () => {
 
     // The outlier is deliberately first: a "take the first alive one" strategy
     // would anchor on it and punish the three correct timelines.
-    const ref = consensusTimeline([outlier, base, agreeing1, agreeing2]);
-    expect(ref).not.toBe(outlier);
+    const { reference } = consensusTimeline([outlier, base, agreeing1, agreeing2]);
+    expect(reference).not.toBe(outlier);
   });
 
   it('falls back to the only usable timeline', () => {
-    expect(consensusTimeline([[], base])).toBe(base);
+    expect(consensusTimeline([[], base]).reference).toBe(base);
   });
 
   it('returns an empty timeline when nothing is usable', () => {
-    expect(consensusTimeline([[1, 2], []])).toEqual([1, 2]);
+    expect(consensusTimeline([[1, 2], []]).reference).toEqual([1, 2]);
   });
 });
 
@@ -72,7 +72,24 @@ describe('regression: spurious rate hypotheses', () => {
     const good = Array.from({ length: 200 }, (_, i) => 25 + i * 6.7);
     // An outlier that a maximising aligner could warp into "agreeing" with all.
     const outlier = good.map((t) => t * 1.042 + 176.5);
-    const ref = consensusTimeline([outlier, good, good.map((t) => t + 0.2), good.map((t) => t - 0.1)]);
-    expect(ref).not.toBe(outlier);
+    const { reference } = consensusTimeline([outlier, good, good.map((t) => t + 0.2), good.map((t) => t - 0.1)]);
+    expect(reference).not.toBe(outlier);
+  });
+});
+
+describe('anchor support', () => {
+  it('reports full support when every timeline agrees', () => {
+    const good = Array.from({ length: 150 }, (_, i) => 20 + i * 5.3);
+    const { support } = consensusTimeline([good, good.map((t) => t + 0.2), good.map((t) => t - 0.1)]);
+    expect(support).toBe(1);
+  });
+
+  it('reports no support when every timeline is a different cut', () => {
+    const a = Array.from({ length: 120 }, (_, i) => 20 + i * 5.3);
+    const b = Array.from({ length: 120 }, (_, i) => 500 + i * 9.1);
+    const c = Array.from({ length: 120 }, (_, i) => 900 + i * 13.7);
+    const { support } = consensusTimeline([a, b, c]);
+    // Nothing commands a majority, so shifting must be refused downstream.
+    expect(support).toBeLessThan(0.5);
   });
 });
