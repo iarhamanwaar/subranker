@@ -153,10 +153,23 @@ h1 em{font-style:normal;color:var(--safe)}
 .chip small{display:block;color:var(--dim);font-weight:400;font-size:11.5px}
 
 label.fld{display:block;font:600 13px var(--sans);margin:0 0 7px}
-select,input[type=number],textarea{background:#0D0F12;border:1px solid var(--line);
+select,input[type=number],textarea{background-color:#0D0F12;border:1px solid var(--line);
   color:var(--caption);border-radius:10px;padding:11px 12px;font:400 13px/1.5 var(--mono)}
 textarea{width:100%;min-height:88px;resize:vertical}
-select,input[type=number]{min-width:180px}
+select,input[type=number]{min-width:200px}
+/* The native arrow sits hard against the right edge and is styled
+   inconsistently across browsers, so it is replaced with a chevron that has
+   room around it. padding-right reserves that room; without it the text runs
+   underneath the arrow on long option names. */
+select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  padding-right:42px;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%238A919D' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 15px center;
+  background-size:12px 8px;
+}
+select::-ms-expand{display:none}
 :is(select,input,textarea):focus-visible{outline:2px solid var(--safe);outline-offset:1px;border-color:transparent}
 .hint{color:var(--dim);font-size:12.5px;margin:7px 0 0}
 
