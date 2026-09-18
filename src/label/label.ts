@@ -75,14 +75,25 @@ export function buildLabel(c: Candidate, index: number, total: number): string {
   return `${rank}. ${parts.join(' · ')}`;
 }
 
-/** Apply labels to ranked candidates and emit Stremio subtitle objects. */
-export function toStremioSubtitles(
-  ranked: Candidate[],
-  relabel: boolean,
-): Array<{ id: string; url: string; lang: string }> {
-  return ranked.map((c, i) => ({
-    id: c.raw.id,
-    url: c.raw.url,
-    lang: relabel ? buildLabel(c, i, ranked.length) : c.raw.lang,
-  }));
+/**
+ * Text for the client's per-subtitle row.
+ *
+ * `label` is a real field on Stremio's Subtitles type (stremio-core:
+ * `pub label: Option<String>`), separate from `lang`. Unlike `lang` it is free
+ * text and is not mapped through a language dictionary, so it is the one place
+ * a per-subtitle description can be put without the language column breaking.
+ */
+export function buildRowLabel(c: Candidate, index: number, total: number): string {
+  const parts: string[] = [];
+  const width = String(total).length;
+  parts.push(`${String(index + 1).padStart(width, '0')}.`);
+
+  const reasons = c.reasons.filter((r) => r !== 'SDH');
+  if (reasons.length > 0) parts.push(reasons.slice(0, 3).join(' · '));
+  else if (c.parsed.group) parts.push(c.parsed.group);
+  else if (c.parsed.source) parts.push(c.parsed.source.toUpperCase());
+  else if (c.raw.source) parts.push(String(c.raw.source));
+
+  if (c.parsed.sdh) parts.push('SDH');
+  return parts.join(' ');
 }

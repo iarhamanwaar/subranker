@@ -2,7 +2,7 @@
  * The request pipeline: fetch upstream, parse, verify, score, rank, relabel.
  */
 import type { Config } from './config.js';
-import { buildLabel } from './label/label.js';
+import { buildLabel, buildRowLabel } from './label/label.js';
 import { parseRelease } from './parse/release.js';
 import { applyTimingScore, rank, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
@@ -147,7 +147,7 @@ async function verifyTop(candidates: Candidate[], limit: number): Promise<Candid
 }
 
 export interface PipelineResult {
-  subtitles: Array<{ id: string; url: string; lang: string }>;
+  subtitles: Array<{ id: string; url: string; lang: string; label?: string }>;
   stats: {
     received: number;
     dropped: number;
@@ -210,6 +210,9 @@ export async function runPipeline(
     id: c.raw.id,
     url: c.raw.url,
     lang: config.relabel ? buildLabel(c, i, ordered.length) : c.raw.lang,
+    // Carried separately from `lang` so the language column stays correct
+    // while the per-row text still says which release this is.
+    label: buildRowLabel(c, i, ordered.length),
   }));
 
   return {
