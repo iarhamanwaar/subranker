@@ -53,3 +53,13 @@ await clock('verify downloads (parallel)', async () => {
   console.log('   per file:', each.sort((a, b) => parseInt(b) - parseInt(a)).slice(0, 8).join('  '));
   return out;
 });
+
+// The stages above do not add up to what the corpus run reported, so time the
+// real thing on the same input rather than inferring from the parts.
+const { runPipeline } = await import('../src/pipeline.js');
+await clock('runPipeline (MAX_RESULTS=0)', () =>
+  runPipeline(subs, { filename: F }, { ...cfg, maxResults: 0, cacheTtl: 0 } as any),
+);
+await clock('runPipeline (2nd, warm)', () =>
+  runPipeline(subs, { filename: F }, { ...cfg, maxResults: 0, cacheTtl: 0 } as any),
+);
