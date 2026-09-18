@@ -41,3 +41,13 @@ describe('parseSubtitlePath', () => {
     expect(parseSubtitlePath('/manifest.json')).toBeNull();
   });
 });
+
+describe('manifest version', () => {
+  it('matches package.json, so a release cannot ship a stale number', async () => {
+    const { buildManifest } = await import('../src/manifest.js');
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(buildManifest({ name: 'SubRanker' }).version).toBe(pkg.version);
+    expect(buildManifest({ name: 'SubRanker' }).version).not.toBe('0.0.0');
+  });
+});

@@ -7,6 +7,27 @@
  * advertises stream, catalog and meta resources this addon must not serve.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Read from package.json rather than written here.
+ *
+ * These drifted: v0.1.1 shipped while the manifest still announced 0.1.0,
+ * because releasing means tagging git and nothing made this string follow.
+ * A client that reports a version is only useful if the number is true.
+ */
+function readVersion(): string {
+  try {
+    const pkg = fileURLToPath(new URL('../package.json', import.meta.url));
+    return (JSON.parse(readFileSync(pkg, 'utf8')) as { version?: string }).version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const VERSION = readVersion();
+
 export interface ManifestOptions {
   name: string;
   /** When set, this instance serves only the nth-ranked subtitle. */
@@ -34,7 +55,7 @@ export function buildManifest({ name, rank, publicUrl }: ManifestOptions): Recor
   const pinned = typeof rank === 'number';
   return {
     id: pinned ? `com.subranker.r${rank}` : 'com.subranker',
-    version: '0.1.0',
+    version: VERSION,
     name: pinned ? rankName(name, rank!) : name,
     description: pinned
       ? `Position ${rank} of SubRanker's ranked subtitles. Install several of these to tell rows apart on clients that show only the addon name.`
