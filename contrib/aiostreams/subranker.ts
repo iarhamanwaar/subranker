@@ -1,9 +1,4 @@
 /**
- * AIOStreams preset for SubRanker.
- *
- * Drop this at `packages/core/src/presets/subranker.ts` and register it in
- * `presetManager.ts`.
- *
  * SubRanker has no public instance — it is self-hosted — so unlike most
  * presets the URL is supplied by the user. Rather than adding a second `url`
  * option, this overrides the one `baseOptions` already provides, making it
@@ -123,6 +118,20 @@ export class SubRankerPreset extends Preset {
     userData: UserData,
     options: Record<string, any>
   ): Promise<Addon[]> {
+    // Self-hosted, so there is no default to fall back to. Failing here with
+    // a clear message beats generating a manifest URL of 'undefined/...'.
+    if (!options.url) {
+      throw new Error(
+        `${options.name} needs the URL of your SubRanker instance. SubRanker is self-hosted: see https://github.com/iarhamanwaar/subranker`
+      );
+    }
+    try {
+      new URL(options.url);
+    } catch {
+      throw new Error(
+        `${options.name} has an invalid SubRanker URL. It must be a full address, such as https://subs.example.com`
+      );
+    }
     return [this.generateAddon(userData, options)];
   }
 
@@ -149,11 +158,17 @@ export class SubRankerPreset extends Preset {
   }
 
   private static generateManifestUrl(options: Record<string, any>): string {
-    if (options.url?.endsWith('/manifest.json')) {
+    // A URL that already carries a config segment was produced by SubRanker's
+    // own setup page and is complete, so it is used untouched. Anything else
+    // is treated as the instance root, including a bare manifest URL: pasting
+    // one should not silently discard the options set here.
+    if (/\/[cr]\/[^/]+\//.test(options.url)) {
       return options.url;
     }
 
-    const host = (options.url ?? '').replace(/\/+$/, '');
+    const host = options.url
+      .replace(/\/manifest\.json$/, '')
+      .replace(/\/+$/, '');
 
     const upstreams = String(options.upstreams ?? '')
       .split(',')
