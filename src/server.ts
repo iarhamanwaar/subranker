@@ -18,6 +18,7 @@ import { loadConfig, type Config } from './config.js';
 import { applyUrlConfig, parseRoute } from './config-url.js';
 import { configurePage } from './configure.js';
 import { buildManifest } from './manifest.js';
+import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { runPipeline } from './pipeline.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
@@ -120,6 +121,16 @@ export function createApp(base: Config) {
 
     if (pathname === '/health') return send(res, 200, JSON.stringify({ ok: true }));
 
+    if (pathname === '/logo.svg') {
+      res.writeHead(200, {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=604800',
+      });
+      res.end(logoSvg());
+      return;
+    }
+
     // Checked before route parsing: a shift path carries base64 segments of
     // its own, which must not be mistaken for a config segment.
     const shift = parseShiftPath(pathname);
@@ -146,7 +157,9 @@ export function createApp(base: Config) {
       return send(
         res,
         200,
-        JSON.stringify(buildManifest({ name: config.addonName, rank: route.rank })),
+        JSON.stringify(
+          buildManifest({ name: config.addonName, rank: route.rank, publicUrl: config.publicUrl }),
+        ),
       );
     }
 

@@ -13,6 +13,7 @@
  * magenta are the colours of a broadcast overlay.
  */
 import type { Config } from './config.js';
+import { logoSvg } from './logo.js';
 
 /**
  * Upstream addons offered as one-tap presets.
@@ -115,8 +116,12 @@ body{margin:0;background:var(--frame);color:var(--caption);font:16px/1.6 var(--s
   background:radial-gradient(120% 140% at 50% 0%,#191C22 0%,#0C0E11 70%);overflow:hidden}
 .plate::after{content:"";position:absolute;inset:14px;border:1px dashed rgba(255,61,127,.22);
   border-radius:8px;pointer-events:none}
-.plate-inner{aspect-ratio:16/7;display:flex;align-items:flex-end;justify-content:center;padding:0 24px 34px}
-.cap{font-size:clamp(19px,3.4vw,30px);font-weight:600;letter-spacing:-.01em;text-align:center;
+.plate-inner{aspect-ratio:16/7;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:18px;padding:34px 24px}
+.mark{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:auto}
+.mark svg{display:block}
+.mark span{font:600 12px/1 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+.cap{margin-top:auto;font-size:clamp(19px,3.4vw,30px);font-weight:600;letter-spacing:-.01em;text-align:center;
   max-width:24ch;text-shadow:0 2px 0 #000,0 0 10px rgba(0,0,0,.85);transition:opacity .45s}
 .cap.out{opacity:0}
 .badge{position:absolute;top:14px;left:16px;font:600 11px/1 var(--mono);letter-spacing:.16em;
@@ -213,7 +218,10 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   <div class="plate">
     <span class="badge">SubRanker</span>
     <span class="rec">01:00:00:00</span>
-    <div class="plate-inner"><div class="cap" id="cap">The right subtitle, first in the list.</div></div>
+    <div class="plate-inner">
+      <div class="mark">${logoSvg(84, false)}<span>SubRanker</span></div>
+      <div class="cap" id="cap">The right subtitle, first in the list.</div>
+    </div>
   </div>
 
   <h1>Stop guessing which subtitle <em>works</em>.</h1>

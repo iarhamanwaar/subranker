@@ -11,6 +11,8 @@ export interface ManifestOptions {
   name: string;
   /** When set, this instance serves only the nth-ranked subtitle. */
   rank?: number | null;
+  /** Public origin, used to point at the icon this server serves itself. */
+  publicUrl?: string;
 }
 
 /**
@@ -28,7 +30,7 @@ export function rankName(base: string, rank: number): string {
   return `${base} ${rank}`;
 }
 
-export function buildManifest({ name, rank }: ManifestOptions): Record<string, unknown> {
+export function buildManifest({ name, rank, publicUrl }: ManifestOptions): Record<string, unknown> {
   const pinned = typeof rank === 'number';
   return {
     id: pinned ? `com.subranker.r${rank}` : 'com.subranker',
@@ -37,7 +39,10 @@ export function buildManifest({ name, rank }: ManifestOptions): Record<string, u
     description: pinned
       ? `Position ${rank} of SubRanker's ranked subtitles. Install several of these to tell rows apart on clients that show only the addon name.`
       : 'Ranks, verifies and repairs subtitles so the best match for the release you are playing is first.',
-    logo: 'https://raw.githubusercontent.com/iarhamanwaar/subranker/main/logo.png',
+    // Served by this instance rather than fetched from a repository, so it
+    // cannot rot: the previous URL pointed at a file that did not exist and
+    // Stremio showed the addon with no icon.
+    ...(publicUrl ? { logo: `${publicUrl}/logo.svg` } : {}),
     resources: ['subtitles'],
     types: ['movie', 'series'],
     idPrefixes: ['tt', 'kitsu'],
