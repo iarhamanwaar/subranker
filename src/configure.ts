@@ -212,7 +212,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   </div>
 
   <section class="cue">
-    <div class="cue-meta"><b>1</b>00:00:00,000<br>&rarr; 00:00:12,000</div>
+    <div class="cue-meta"></div>
     <div>
       <h2>Pick your sources</h2>
       <p class="note">Tap to add. Several are queried at once and merged, which is worth doing because they carry different information — one may know the exact file, another simply covers more ground.</p>
@@ -228,7 +228,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   </section>
 
   <section class="cue adv">
-    <div class="cue-meta"><b>2</b>00:00:12,000<br>&rarr; 00:00:26,000</div>
+    <div class="cue-meta"></div>
     <div>
       <h2>Repairs</h2>
       <p class="note">Applied to the file before it reaches your player.</p>
@@ -241,7 +241,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   </section>
 
   <section class="cue adv">
-    <div class="cue-meta"><b>3</b>00:00:26,000<br>&rarr; 00:00:38,000</div>
+    <div class="cue-meta"></div>
     <div>
       <h2>What you see</h2>
       <p class="note">How much of the ranked list reaches your player.</p>
@@ -255,7 +255,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   </section>
 
   <section class="cue">
-    <div class="cue-meta"><b>4</b>00:00:38,000<br>&rarr; 00:00:50,000</div>
+    <div class="cue-meta"></div>
     <div>
       <h2>Install</h2>
       <p class="note">Your settings live inside the link, so nothing is kept here.</p>
@@ -328,10 +328,35 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
 
   var simple = document.getElementById('mSimple');
   var adv = document.getElementById('mAdv');
+  // Cue numbers and timecodes are derived from the steps actually on screen.
+  // Hiding the advanced steps in Simple mode would otherwise leave the
+  // sequence reading 1, 4 — numbering that describes the markup rather than
+  // the reader's path through it.
+  function stamp(seconds) {
+    var m = Math.floor(seconds / 60), s = seconds % 60;
+    return '00:' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + ',000';
+  }
+  function renumber() {
+    var cues = Array.prototype.filter.call(document.querySelectorAll('.cue'), function (el) {
+      return el.offsetParent !== null;
+    });
+    cues.forEach(function (el, i) {
+      var meta = el.querySelector('.cue-meta');
+      meta.textContent = '';
+      var n = document.createElement('b');
+      n.textContent = String(i + 1);
+      meta.appendChild(n);
+      meta.appendChild(document.createTextNode(stamp(i * 12)));
+      meta.appendChild(document.createElement('br'));
+      meta.appendChild(document.createTextNode('\u2192 ' + stamp((i + 1) * 12)));
+    });
+  }
+
   function mode(m) {
     document.body.dataset.mode = m;
     simple.setAttribute('aria-pressed', String(m === 'simple'));
     adv.setAttribute('aria-pressed', String(m === 'advanced'));
+    renumber();
   }
   simple.addEventListener('click', function () { mode('simple'); });
   adv.addEventListener('click', function () { mode('advanced'); });
@@ -401,6 +426,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
   }
 
   syncChips();
+  renumber();
 })();
 </script>
 </body>
