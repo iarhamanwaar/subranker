@@ -223,6 +223,25 @@ per playback — no addon can show the actual release name this way.
 
 ## Setup
 
+There is no public instance to install. SubRanker fetches subtitle files on
+your behalf and its upstream URLs often carry your own credentials, so it is
+built to be run by the person using it. The one-click options below deploy
+your own copy from this repository.
+
+### One click
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://dashboard.render.com/deploy?repo=https://github.com/iarhamanwaar/subranker)
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=docker&image=ghcr.io/iarhamanwaar/subranker:latest&name=subranker&ports=7010;http;/&env[HOST]=0.0.0.0&env[UPSTREAM_BASE]=)
+
+Both prompt for `UPSTREAM_BASE` before the first deploy. Neither this README
+nor [`render.yaml`](render.yaml) contains a value for it, deliberately: an
+addon URL frequently embeds an API key, and anything committed here is public.
+
+Once it is running, note the URL it was given, set `PUBLIC_URL` to it, and set
+`AUTO_SHIFT=true` if you want timing repair. That order matters — corrected
+subtitles are served from `PUBLIC_URL`, so enabling auto-shift before the
+instance knows its own address does nothing.
+
 ### Docker
 
 ```bash

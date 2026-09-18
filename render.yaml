@@ -1,0 +1,41 @@
+# Render Blueprint. Lets someone run their own SubRanker without a public
+# instance existing anywhere.
+#
+# UPSTREAM_BASE is deliberately `sync: false` rather than given a value here.
+# Subtitle addon URLs routinely embed credentials — an AIOStreams manifest URL
+# encodes your debrid API key — and anything written into this file is public.
+# `sync: false` makes Render prompt for it at deploy time instead.
+services:
+  - type: web
+    name: subranker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Required. Comma-separated subtitle addon base URLs, no /manifest.json.
+      - key: UPSTREAM_BASE
+        sync: false
+
+      # Set this to the URL Render gives you, then turn AUTO_SHIFT on.
+      # Timing-corrected subtitles are served from this origin, so auto-shift
+      # stays off until it is known rather than silently doing nothing.
+      - key: PUBLIC_URL
+        sync: false
+      - key: AUTO_SHIFT
+        value: false
+
+      # Render routes to the port it injects as PORT, so PORT is not set here.
+      # The container must listen on all interfaces, not loopback.
+      - key: HOST
+        value: 0.0.0.0
+
+      - key: MAX_RESULTS
+        value: 6
+      - key: CACHE_TTL
+        value: 3600
+      - key: FIX_OVERLAPS
+        value: true
+      - key: FIX_OCR
+        value: true
+      - key: DEMOTE_FORCED
+        value: true
