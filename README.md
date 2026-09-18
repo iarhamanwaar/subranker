@@ -4,12 +4,15 @@
 [![Image](https://github.com/iarhamanwaar/subranker/actions/workflows/image.yml/badge.svg)](https://github.com/iarhamanwaar/subranker/pkgs/container/subranker)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A Stremio addon that sits in front of your subtitle addons and makes the list
-usable: it ranks candidates against the release you are actually playing,
-removes the ones that are dead or wrong, repairs the ones that are fixable, and
-labels every row so you can tell them apart.
+A Stremio addon that sits in front of the subtitle addons you already use and
+makes the list usable: it ranks candidates against the release you are actually
+playing, removes the ones that are dead or wrong, repairs the ones that are
+fixable, and labels every row so you can tell them apart.
 
-Works for movies, TV and anime alike — nothing in it assumes a content type.
+It has no subtitle sources of its own and replaces nothing. Whatever you use
+today — an aggregator, OpenSubtitles, one of the AI translation addons —
+becomes its input. Works for movies, TV and anime alike; nothing in it assumes
+a content type.
 
 <p align="center">
   <img src="docs/configure.png" alt="The SubRanker setup page: pick your subtitle sources, then generate an install link." width="820">
@@ -197,6 +200,25 @@ The motivation is metadata, not volume: some providers report `moviehash` — th
 exact-file signal that outweighs everything else in scoring — while aggregators
 cover far more sources but report no hash. Querying both gets the breadth of
 one and the certainty of the other.
+
+## It does not replace your subtitle addons
+
+This is worth being explicit about, because the name suggests otherwise.
+
+SubRanker has no subtitle sources of its own. It is a layer, and what it ranks
+is whatever you point it at. Installing it is not a decision to stop using the
+addon you already have — that addon becomes its input.
+
+That includes the translation addons, which are what most of this ecosystem is
+building. They answer a different question. They solve *there is no subtitle in
+my language*; this solves *there are forty in my language and I cannot tell
+which one works*. An addon that machine-translates into your language still
+emits a file that may be cut for a different release, drift against your
+framerate, or arrive as mojibake. Put one behind SubRanker and its output gets
+ranked and repaired like any other candidate.
+
+So the useful arrangement is usually a translation or aggregation addon in
+`UPSTREAM_BASE`, with SubRanker in front of it — not one instead of the other.
 
 ## Telling rows apart
 
