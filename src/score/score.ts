@@ -27,6 +27,22 @@ export const HASH_WEIGHT =
 export const SDH_PENALTY = 25;
 
 /**
+ * Penalties for properties that are present on both sides and disagree.
+ *
+ * Scoring only ever added points for matches, so a candidate could rank well
+ * purely on timing while contradicting the release outright — a `WEB 480p`
+ * subtitle outranked `erai-raws 1080p` against a `Bluray-1080p` target.
+ * A stated disagreement is evidence, not merely an absent match.
+ *
+ * Only applied when both sides state a value: most subtitles name neither a
+ * source nor a resolution, and silence must stay free.
+ */
+export const MISMATCH_PENALTIES = {
+  source: 16,
+  resolution: 8,
+} as const;
+
+/**
  * Maximum bonus awarded for agreeing with the consensus timeline.
  *
  * This is the fallback evidence when the release name carries no group. Players
@@ -117,12 +133,20 @@ export function scoreCandidate(
     score += WEIGHTS.group;
     reasons.push(p.group);
   }
-  if (target.source && p.source && target.source === p.source) {
-    score += WEIGHTS.source * boost;
-    reasons.push(p.source.toUpperCase());
+  if (target.source && p.source) {
+    if (target.source === p.source) {
+      score += WEIGHTS.source * boost;
+      reasons.push(p.source.toUpperCase());
+    } else {
+      score -= MISMATCH_PENALTIES.source;
+    }
   }
-  if (target.resolution && p.resolution && target.resolution === p.resolution) {
-    score += WEIGHTS.resolution * boost;
+  if (target.resolution && p.resolution) {
+    if (target.resolution === p.resolution) {
+      score += WEIGHTS.resolution * boost;
+    } else {
+      score -= MISMATCH_PENALTIES.resolution;
+    }
   }
   if (target.videoCodec && p.videoCodec && target.videoCodec === p.videoCodec) {
     score += WEIGHTS.videoCodec * boost;

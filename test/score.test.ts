@@ -90,3 +90,22 @@ describe('scoreAll / rank', () => {
     expect(ranked[1]?.parsed.dub).toBe(true);
   });
 });
+
+describe('mismatch penalties', () => {
+  it('ranks a matching release above one that contradicts it', async () => {
+    const target = await parseRelease('Demon Slayer - S01E01 - Cruelty Bluray-1080p.mkv');
+    const cands = [
+      await candidate('Demon Slayer S01E01 WEBRip 480p'),
+      await candidate('[Erai-raws] Kimetsu no Yaiba-01-1080p BluRay'),
+    ];
+    const ranked = rank(scoreAll(cands, target, {}));
+    expect(ranked[0]?.parsed.resolution).toBe('1080p');
+  });
+
+  it('does not penalise a subtitle that states nothing', async () => {
+    const target = await parseRelease('Demon Slayer - S01E01 Bluray-1080p.mkv');
+    const silent = await candidate('Demon Slayer - S01E01');
+    const [scored] = scoreAll([silent], target, {});
+    expect(scored!.score).toBeGreaterThanOrEqual(0);
+  });
+});
