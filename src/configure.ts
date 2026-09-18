@@ -245,6 +245,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
       <div style="margin-top:16px">
         <label class="fld" for="ups">Sources to use</label>
         <textarea id="ups" spellcheck="false" placeholder="Tap a source above, or paste an addon URL here — one per line."></textarea>
+        <p class="note">Any subtitle addon works here, including the AI translation ones. They need their own settings, so paste the configured URL they gave you rather than their plain address.</p>
       </div>
     </div>
   </section>
