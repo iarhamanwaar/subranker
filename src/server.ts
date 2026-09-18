@@ -1,26 +1,36 @@
 /**
  * HTTP entry point.
  *
- * Only the `/subtitles/` route is rewritten. Everything else is proxied through
- * untouched, so installing this in place of an existing addon changes subtitle
- * ordering and nothing else.
+ * Routes:
+ *   /configure                        the setup page
+ *   /manifest.json                    instance configured from the environment
+ *   /c/<config>/manifest.json         instance configured from the URL
+ *   /c/<config>/r/<n>/manifest.json   one instance per ranked position
+ *   /subtitles/...                    the ranked list (same prefixes apply)
+ *   /shift/...                        a repaired subtitle file
+ *
+ * Only subtitle routes are served. Proxying anything else would re-serve the
+ * upstream's stream results — backed by the operator's paid debrid account —
+ * to anyone who found this host.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { loadConfig, type Config } from './config.js';
-import { runPipeline } from './pipeline.js';
+import { applyUrlConfig, parseRoute } from './config-url.js';
+import { configurePage } from './configure.js';
+import { buildManifest } from './manifest.js';
 import { buildProbeSubtitles } from './label/probe.js';
+import { runPipeline } from './pipeline.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchUpstreams } from './upstream/fetch.js';
-import type { RawSubtitle, RequestExtras } from './types.js';
+import type { RequestExtras } from './types.js';
 
 /**
  * Parse Stremio's extras segment.
  *
  * Stremio appends extras between the id and `.json`, e.g.
  * `/subtitles/series/tt9335498:1:1/videoHash=…&videoSize=…&filename=….json`.
- * Several clients — the Android TV client among them — omit the segment
- * entirely, so every field is optional and the pipeline degrades to metadata
- * ranking when they are missing.
+ * Some clients omit the segment, so every field is optional and the pipeline
+ * degrades to metadata ranking when they are missing.
  */
 export function parseExtras(segment: string | undefined): RequestExtras {
   if (!segment) return {};
@@ -59,12 +69,12 @@ interface CacheEntry {
   body: string;
 }
 
-export function createApp(config: Config) {
+export function createApp(base: Config) {
   const cache = new Map<string, CacheEntry>();
 
-  const send = (res: ServerResponse, status: number, body: string) => {
+  const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Type': `${type}; charset=utf-8`,
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'public, max-age=300',
     });
@@ -75,10 +85,10 @@ export function createApp(config: Config) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const pathname = url.pathname;
 
-    if (pathname === '/health') {
-      return send(res, 200, JSON.stringify({ ok: true }));
-    }
+    if (pathname === '/health') return send(res, 200, JSON.stringify({ ok: true }));
 
+    // Checked before route parsing: a shift path carries base64 segments of
+    // its own, which must not be mistaken for a config segment.
     const shift = parseShiftPath(pathname);
     if (shift) {
       const body = await fetchShifted(shift);
@@ -92,67 +102,60 @@ export function createApp(config: Config) {
       return;
     }
 
-    if (pathname.endsWith('/manifest.json')) {
-      const upstream = await fetch(`${config.upstreamBases[0]}/manifest.json`);
-      const manifest = (await upstream.json()) as Record<string, unknown>;
+    const route = parseRoute(pathname);
+    const config = route.config ? applyUrlConfig(base, route.config) : base;
+
+    if (route.rest === '/' || route.rest === '/configure' || route.rest === '/configure/') {
+      return send(res, 200, configurePage(base), 'text/html');
+    }
+
+    if (route.rest === '/manifest.json') {
       return send(
         res,
         200,
-        JSON.stringify({
-          // Deliberately NOT spread from the upstream manifest. Doing so leaks
-          // upstream identifiers (an AIOStreams id embeds the user's config
-          // UUID) onto a publicly reachable endpoint, and it would advertise
-          // stream/catalog/meta resources this addon must not serve.
-          id: 'com.subranker',
-          version: '0.1.0',
-          name: config.addonName,
-          description:
-            'Ranks, verifies and relabels subtitles so the best match for the ' +
-            'release you are playing is first.',
-          resources: ['subtitles'],
-          types: Array.isArray(manifest.types) ? manifest.types : ['movie', 'series'],
-          idPrefixes: Array.isArray(manifest.idPrefixes) ? manifest.idPrefixes : ['tt', 'kitsu'],
-          catalogs: [],
-        }),
+        JSON.stringify(buildManifest({ name: config.addonName, rank: route.rank })),
       );
     }
 
-    const parsed = parseSubtitlePath(pathname);
-    if (!parsed) {
-      // Subtitles only. Proxying other routes would re-serve the upstream's
-      // stream results — which are backed by the operator's paid debrid
-      // account — to anyone who found this host.
-      return send(res, 404, JSON.stringify({ err: 'not found' }));
-    }
+    const parsed = parseSubtitlePath(route.rest);
+    if (!parsed) return send(res, 404, JSON.stringify({ err: 'not found' }));
 
-    const key = pathname;
+    // Keyed on the effective upstreams and rank as well as the path, so two
+    // users with different configs cannot be served each other's results.
+    const key = `${config.upstreamBases.join(',')}|${route.rank ?? 'all'}|${route.rest}`;
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < config.cacheTtl * 1000) {
-      return send(res, 200, hit.body);
-    }
+    if (hit && Date.now() - hit.at < config.cacheTtl * 1000) return send(res, 200, hit.body);
 
     try {
-      const merged = await fetchUpstreams(config.upstreamBases, pathname);
+      const merged = await fetchUpstreams(config.upstreamBases, route.rest);
       const subs = merged.subtitles;
 
       if (config.probeLabels) {
-        // Diagnostic: return one row per candidate label format instead of
-        // real results, to find out what this client will render.
         return send(res, 200, JSON.stringify({ subtitles: buildProbeSubtitles(subs[0]) }));
       }
 
       const result = await runPipeline(subs, parsed.extras, config);
-      const body = JSON.stringify({ subtitles: result.subtitles });
+
+      // A rank-pinned instance returns exactly its own position, so that
+      // installing several gives one named row each.
+      const subtitles =
+        route.rank === null
+          ? result.subtitles
+          : result.subtitles.slice(route.rank - 1, route.rank);
+
+      const body = JSON.stringify({ subtitles });
 
       console.log(
         JSON.stringify({
-          path: pathname,
-          extras: parsed.extras,
+          path: route.rest,
+          rank: route.rank,
+          urlConfig: route.config !== null,
           hasFilename: Boolean(parsed.extras.filename),
           upstreamsOk: merged.ok.length,
           upstreamsFailed: merged.failed,
-          ...result.stats,
-          target: undefined,
+          received: result.stats.received,
+          returned: subtitles.length,
+          verified: result.stats.verified,
           targetGroup: result.stats.target.group ?? null,
         }),
       );

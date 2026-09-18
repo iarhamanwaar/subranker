@@ -190,6 +190,29 @@ exact-file signal that outweighs everything else in scoring — while aggregator
 cover far more sources but report no hash. Querying both gets the breadth of
 one and the certainty of the other.
 
+## Telling rows apart
+
+Some clients label every subtitle row with the **addon's** name and ignore the
+per-subtitle `label` field, so a list of six results shows six identical rows.
+Measured on Stremio Android TV 1.10.4: embedded tracks from the video file do
+render their own names ("Full Subtitles", "Signs & Songs"), so the capability
+exists — it simply is not wired to `label` for addon-supplied tracks
+([stremio-core#907](https://github.com/Stremio/stremio-core/issues/907) tracks
+this).
+
+Until that changes, the only way to get distinguishable rows is for them to
+come from different addons. The configure page can emit one install link per
+ranked position:
+
+```
+/c/<config>/r/1/manifest.json   ->  "SubRanker 1 · best match"
+/c/<config>/r/2/manifest.json   ->  "SubRanker 2"
+```
+
+Each instance serves exactly its own position. The names describe the position
+rather than the release, because a manifest is fetched at install time and not
+per playback — no addon can show the actual release name this way.
+
 ## Setup
 
 Requires Node 20+.
@@ -200,8 +223,13 @@ cp .env.example .env     # set UPSTREAM_BASE
 pnpm build && pnpm start
 ```
 
-Then install `https://your-host/manifest.json` in Stremio, or add it as a
-custom addon inside an aggregator.
+Then open `https://your-host/configure`, fill in your upstreams, and install
+the link it gives you. Settings are encoded into that URL, so one deployment
+serves everyone and nothing is stored server-side. `UPSTREAM_BASE` still works
+as a default for the bare `/manifest.json`.
+
+It can also be added as a custom addon inside an aggregator, though installing
+it directly is a little faster and guarantees the ordering survives.
 
 > **Never commit your `UPSTREAM_BASE`.** Addon URLs frequently embed API keys
 > in their config segment.
