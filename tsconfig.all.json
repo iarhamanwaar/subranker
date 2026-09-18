@@ -1,0 +1,13 @@
+{
+  // Everything that is not shipped: probes under scripts/ and the test suite.
+  // The main config sets rootDir to src and emits, so those files were never
+  // typechecked at all — a rename broke a probe on the server and neither the
+  // build nor CI noticed, because tsx does not typecheck either.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+}
