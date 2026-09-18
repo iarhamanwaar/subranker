@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      # The published page is built from user-supplied values and the repo is
+      # public, so both are worth a standing check rather than a habit.
+      - name: No secrets in the tree
+        run: |
+          # .github is excluded because this step's own pattern lives here and
+          # would otherwise match itself on every run.
+          if grep -rInE 'eyJpIjoi|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+               --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
+               --exclude-dir=.github .; then
+            echo "::error::possible credential or config blob committed"; exit 1
+          fi
+      - name: No innerHTML in the configure page
+        run: |
+          if grep -n 'innerHTML *=' src/configure.ts; then
+            echo "::error::build the DOM instead; this page renders user input"; exit 1
+          fi

@@ -10,6 +10,13 @@
 export interface Config {
   port: number;
   /**
+   * Address to bind.
+   *
+   * Loopback is right behind a reverse proxy and wrong inside a container,
+   * where nothing outside the container could reach it.
+   */
+  host: string;
+  /**
    * Upstream Stremio subtitle addons, without the trailing `/manifest.json`.
    *
    * Several may be given, comma-separated. They are queried in parallel and
@@ -109,6 +116,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port: int(env.PORT, 7010),
+    host: env.HOST ?? '127.0.0.1',
     upstreamBases,
     relabel: bool(env.RELABEL, true),
     dropMismatches: bool(env.DROP_MISMATCHES, true),

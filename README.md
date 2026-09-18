@@ -1,5 +1,9 @@
 # SubRanker
 
+[![CI](https://github.com/iarhamanwaar/subranker/actions/workflows/ci.yml/badge.svg)](https://github.com/iarhamanwaar/subranker/actions/workflows/ci.yml)
+[![Image](https://github.com/iarhamanwaar/subranker/actions/workflows/image.yml/badge.svg)](https://github.com/iarhamanwaar/subranker/pkgs/container/subranker)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A Stremio addon that sits in front of your subtitle addons and makes the list
 usable: it ranks candidates against the release you are actually playing,
 removes the ones that are dead or wrong, repairs the ones that are fixable, and
@@ -215,6 +219,34 @@ per playback — no addon can show the actual release name this way.
 
 ## Setup
 
+### Docker
+
+```bash
+docker run -d --name subranker -p 7010:7010 \
+  -e UPSTREAM_BASE="https://your-subtitle-addon/en" \
+  -e PUBLIC_URL="https://subs.example.com" \
+  ghcr.io/iarhamanwaar/subranker:latest
+```
+
+Or with compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/iarhamanwaar/subranker/main/docker-compose.yml
+UPSTREAM_BASE="https://your-subtitle-addon/en" docker compose up -d
+```
+
+Images are built for `amd64` and `arm64`, so a Raspberry Pi or a Graviton
+instance works without a local build.
+
+`PUBLIC_URL` matters as soon as you enable timing repair: corrected subtitles
+and the addon icon are fetched by the client at an absolute URL, so the
+instance has to know its own address.
+
+Put a reverse proxy in front for TLS — Stremio refuses plain HTTP for anything
+that is not localhost.
+
+### From source
+
 Requires Node 20+.
 
 ```bash
@@ -239,7 +271,8 @@ it directly is a little faster and guarantees the ordering survives.
 | Variable | Default | Purpose |
 |---|---|---|
 | `UPSTREAM_BASE` | *(required)* | Upstream subtitle addon(s), without `/manifest.json`. Comma-separated for several |
-| `PORT` | `7010` | Loopback bind port |
+| `PORT` | `7010` | Port to listen on |
+| `HOST` | `127.0.0.1` | Address to bind. The Docker image sets `0.0.0.0` |
 | `PUBLIC_URL` | *(none)* | Public origin of this instance. Required by `AUTO_SHIFT` |
 | `ADDON_NAME` | `SubRanker` | Name reported in the manifest |
 | `VERIFY` | `true` | Download top candidates to check liveness, encoding and timing |

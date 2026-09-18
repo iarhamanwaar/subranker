@@ -10,6 +10,7 @@ import type { Config } from '../src/config.js';
 
 const BASE: Config = {
   port: 7010,
+  host: '127.0.0.1',
   upstreamBases: ['https://default.example'],
   relabel: false,
   dropMismatches: true,

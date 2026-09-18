@@ -1,0 +1,28 @@
+# Minimal deployment. Put a reverse proxy in front for TLS: Stremio refuses
+# plain HTTP for anything that is not localhost.
+services:
+  subranker:
+    image: ghcr.io/iarhamanwaar/subranker:latest
+    # To build from a checkout instead of pulling: docker compose up --build
+    # build: .
+    container_name: subranker
+    restart: unless-stopped
+    ports:
+      - "7010:7010"
+    environment:
+      # Your upstream subtitle addons, without /manifest.json.
+      # Comma-separated for several. Get them from /configure.
+      UPSTREAM_BASE: "${UPSTREAM_BASE:?set UPSTREAM_BASE, see .env.example}"
+
+      # Public origin of this instance. Needed to serve repaired subtitles and
+      # the addon icon, both of which the client fetches by absolute URL.
+      PUBLIC_URL: "${PUBLIC_URL:-}"
+
+      AUTO_SHIFT: "${AUTO_SHIFT:-true}"
+      FIX_OVERLAPS: "${FIX_OVERLAPS:-true}"
+      MAX_RESULTS: "${MAX_RESULTS:-0}"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 4s
+      retries: 3

@@ -222,7 +222,7 @@ export function createApp(base: Config) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
-  createServer(createApp(config)).listen(config.port, '127.0.0.1', () => {
-    console.log(`subranker listening on 127.0.0.1:${config.port}`);
+  createServer(createApp(config)).listen(config.port, config.host, () => {
+    console.log(`subranker listening on ${config.host}:${config.port}`);
   });
 }
