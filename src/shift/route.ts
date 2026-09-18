@@ -8,9 +8,12 @@
 import { applyShift, type Shift } from './rewrite.js';
 import { stripAds } from './ads.js';
 import { decodeSubtitle } from './encoding.js';
+import { cleanupCues } from './cleanup.js';
 
 export interface ShiftRequest extends Shift {
   url: string;
+  /** Cleanups to apply, as a compact flag string: h=HI, u=uppercase, o=OCR. */
+  flags?: string;
 }
 
 function encodeNumber(n: number): string {
@@ -29,11 +32,12 @@ function decodeNumber(s: string): number | null {
 
 export function buildShiftPath(req: ShiftRequest): string {
   const encoded = Buffer.from(req.url, 'utf8').toString('base64url');
-  return `/shift/${encodeNumber(req.offset)}/${encodeNumber(req.rate)}/${encoded}.srt`;
+  const flags = req.flags && req.flags.length > 0 ? req.flags : '0';
+  return `/shift/${encodeNumber(req.offset)}/${encodeNumber(req.rate)}/${flags}/${encoded}.srt`;
 }
 
 export function parseShiftPath(pathname: string): ShiftRequest | null {
-  const m = /^\/shift\/([^/]+)\/([^/]+)\/(.+)\.srt$/.exec(pathname);
+  const m = /^\/shift\/([^/]+)\/([^/]+)\/([a-z0]{1,8})\/(.+)\.srt$/.exec(pathname);
   if (!m) return null;
   const offset = decodeNumber(m[1]!);
   const rate = decodeNumber(m[2]!);
@@ -41,12 +45,12 @@ export function parseShiftPath(pathname: string): ShiftRequest | null {
 
   let url: string;
   try {
-    url = Buffer.from(m[3]!, 'base64url').toString('utf8');
+    url = Buffer.from(m[4]!, 'base64url').toString('utf8');
   } catch {
     return null;
   }
   if (!isFetchableUrl(url)) return null;
-  return { offset, rate, url };
+  return { offset, rate, url, flags: m[3]! };
 }
 
 /**
@@ -116,7 +120,13 @@ export async function fetchShifted(req: ShiftRequest, timeoutMs = 8000): Promise
       const { text } = decodeSubtitle(buf);
       // Banners are removed before shifting: they sit outside the real
       // timeline, so dropping them first keeps the cue numbering clean.
-      const cleaned = stripAds(text).content;
+      let cleaned = stripAds(text).content;
+      const flags = req.flags ?? '0';
+      cleaned = cleanupCues(cleaned, {
+        removeHearingImpaired: flags.includes('h'),
+        fixUppercase: flags.includes('u'),
+        fixOcr: flags.includes('o'),
+      }).content;
       return applyShift(cleaned, { offset: req.offset, rate: req.rate });
     }
     return null;

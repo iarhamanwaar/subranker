@@ -5,7 +5,17 @@ describe('shift path round-trip', () => {
   it('survives a round trip with a negative offset', () => {
     const req = { offset: -2.5, rate: 1, url: 'https://example.com/a.srt?x=1&y=2' };
     const parsed = parseShiftPath(buildShiftPath(req));
-    expect(parsed).toEqual(req);
+    // No cleanups requested is encoded as "0" rather than an empty segment.
+    expect(parsed).toEqual({ ...req, flags: '0' });
+  });
+
+  it('round-trips the cleanup flags', () => {
+    const req = { offset: 0, rate: 1, url: 'https://example.com/a.srt', flags: 'hou' };
+    expect(parseShiftPath(buildShiftPath(req))!.flags).toBe('hou');
+  });
+
+  it('rejects a path with no flag segment', () => {
+    expect(parseShiftPath('/shift/p0_000/p1_000/aHR0cHM6Ly9lLmNvbQ.srt')).toBeNull();
   });
 
   it('preserves a framerate ratio to three decimals', () => {
@@ -20,7 +30,7 @@ describe('shift path round-trip', () => {
   });
 
   it('rejects a non-positive rate', () => {
-    expect(parseShiftPath('/shift/p0_000/p0_000/aHR0cHM6Ly9lLmNvbQ.srt')).toBeNull();
+    expect(parseShiftPath('/shift/p0_000/p0_000/0/aHR0cHM6Ly9lLmNvbQ.srt')).toBeNull();
   });
 });
 

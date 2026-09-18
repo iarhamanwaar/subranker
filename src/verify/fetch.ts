@@ -12,6 +12,7 @@ import type { Verification } from '../types.js';
 import { align, parseTimeline, type Timeline } from './cues.js';
 import { stripAds } from '../shift/ads.js';
 import { decodeSubtitle } from '../shift/encoding.js';
+import { cleanupCues } from '../shift/cleanup.js';
 
 /** Statuses that indicate the server refused us specifically, not a dead link. */
 const IP_BLOCK_STATUSES = new Set([401, 403, 429]);
@@ -100,6 +101,16 @@ export async function fetchAndInspect(
         adCues: stripAds(text).removed,
         encoding: decoded.encoding,
         encodingRepaired: decoded.repaired,
+        ...(function () {
+          // Measured here for the same reason as the ad count: the content is
+          // already in hand, so a second download would be pure waste.
+          const c = cleanupCues(text, {
+            removeHearingImpaired: true,
+            fixUppercase: true,
+            fixOcr: true,
+          });
+          return { hiCues: c.hiCuesChanged, allCaps: c.uppercaseFixed, ocrCues: c.ocrFixed };
+        })(),
       },
       timeline,
       blocked: false,

@@ -48,6 +48,24 @@ export interface Config {
   publicUrl: string;
   /** Serve timing-corrected subtitles in place of drifting ones. */
   autoShift: boolean;
+  /**
+   * Strip hearing-impaired annotations (`[DOOR CREAKS]`, `DOCTOR:`).
+   *
+   * Turns an SDH track into an ordinary subtitle, which matters on titles
+   * where SDH is the only thing on offer.
+   */
+  removeHearingImpaired: boolean;
+  /** Convert files written entirely in capitals to sentence case. */
+  fixUppercase: boolean;
+  /** Repair characters that optical recognition routinely confuses. */
+  fixOcr: boolean;
+  /**
+   * Demote forced tracks (signs and foreign dialogue only).
+   *
+   * They are not wrong, they are simply not what you want when you asked for
+   * subtitles, and they look broken if picked by mistake.
+   */
+  demoteForced: boolean;
   addonName: string;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
@@ -91,6 +109,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxResults: Number(env.MAX_RESULTS ?? 0) || 0,
     publicUrl: (env.PUBLIC_URL ?? '').replace(/\/+$/, ''),
     autoShift: bool(env.AUTO_SHIFT, false),
+    removeHearingImpaired: bool(env.REMOVE_HI, false),
+    fixUppercase: bool(env.FIX_UPPERCASE, true),
+    fixOcr: bool(env.FIX_OCR, true),
+    demoteForced: bool(env.DEMOTE_FORCED, true),
     addonName: env.ADDON_NAME ?? 'SubRanker',
     probeLabels: bool(env.PROBE_LABELS, false),
   };

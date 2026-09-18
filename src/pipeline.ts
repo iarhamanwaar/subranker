@@ -4,6 +4,7 @@
 import type { Config } from './config.js';
 import { buildLabel, buildRowLabel } from './label/label.js';
 import { parseRelease } from './parse/release.js';
+import { detectForced, isForced } from './parse/forced.js';
 import { applyTimingScore, rank, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect, withAlignment } from './verify/fetch.js';
@@ -173,7 +174,24 @@ export async function runPipeline(
   let ordered = rank(scored);
 
   if (config.verify && ordered.length > 0) {
-    const checked = await verifyTop(ordered, config.verifyLimit);
+    let checked = await verifyTop(ordered, config.verifyLimit);
+
+    if (config.demoteForced) {
+      // A forced track covers signs only. It is not wrong, it is simply not
+      // what was asked for, and it looks broken if picked: long silences,
+      // then one line. Detected after verification because the cue count is
+      // the signal that works regardless of how the track is named.
+      checked = checked.map((c) => {
+        const signals = detectForced(c.releaseText, c.verification);
+        if (!isForced(signals)) return c;
+        return {
+          ...c,
+          score: c.score - 120,
+          reasons: [...c.reasons, 'forced'],
+        };
+      });
+    }
+
     ordered = rank(applyTimingScore(checked));
   }
 
@@ -192,7 +210,16 @@ export async function runPipeline(
       const needsShift = isShiftSafeToApply(shift, v.agreement);
       const hasAds = (v.adCues ?? 0) > 0;
       const badEncoding = v.encodingRepaired === true;
-      if ((!needsShift && !hasAds && !badEncoding) || !isFetchableUrl(c.raw.url)) return c;
+
+      let flags = '';
+      if (config.removeHearingImpaired && (v.hiCues ?? 0) > 0) flags += 'h';
+      if (config.fixUppercase && v.allCaps === true) flags += 'u';
+      if (config.fixOcr && (v.ocrCues ?? 0) > 0) flags += 'o';
+
+      const needsCleanup = flags.length > 0;
+      if ((!needsShift && !hasAds && !badEncoding && !needsCleanup) || !isFetchableUrl(c.raw.url)) {
+        return c;
+      }
 
       // A file with banners is worth proxying even when its timing is fine.
       const applied = needsShift ? shift : { offset: 0, rate: 1 };
@@ -200,9 +227,12 @@ export async function runPipeline(
       if (needsShift) reasons.push('timing corrected');
       if (hasAds) reasons.push('ads removed');
       if (badEncoding) reasons.push('encoding fixed');
+      if (flags.includes('h')) reasons.push('HI tags removed');
+      if (flags.includes('u')) reasons.push('caps fixed');
+      if (flags.includes('o')) reasons.push('OCR fixed');
       return {
         ...c,
-        raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...applied, url: c.raw.url })}` },
+        raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...applied, url: c.raw.url, flags })}` },
         reasons,
       };
     });

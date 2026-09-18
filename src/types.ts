@@ -98,4 +98,10 @@ export interface Verification {
   encoding?: string;
   /** True when the text had to be repaired to be readable. */
   encodingRepaired?: boolean;
+  /** Cues carrying hearing-impaired annotations. */
+  hiCues?: number;
+  /** True when the file is written entirely in capitals. */
+  allCaps?: boolean;
+  /** Cues containing repairable OCR damage. */
+  ocrCues?: number;
 }

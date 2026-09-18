@@ -122,6 +122,38 @@ because `don’t` mangles to `donâ€™t` whose `€` and `™` are above U+00
 cannot be expressed in Latin-1 at all. A repair is kept only when it makes the
 text more plausible, since the same operation on correct text destroys it.
 
+### Cue-text cleanup
+
+Three repairs borrowed from what Bazarr has settled on, applied to the file we
+already rewrite.
+
+**Hearing-impaired removal** strips `[DOOR CREAKS]`, `(SIRENS WAIL)` and
+`DOCTOR:` speaker labels, dropping cues that contain nothing else. An SDH track
+then becomes an ordinary subtitle, which matters on titles where SDH is all
+there is. Off by default, since it rewrites dialogue.
+
+A speaker label is only recognised when words follow it **on the same line**.
+Without that rule a title card — `EPISODE 1:` above `CRUELTY` — is read as a
+speaker and silently deleted, which an audit against real files caught.
+
+**Uppercase** is judged over the whole file rather than per line: one shouted
+line is emphasis, a whole file in capitals is a transcription style.
+
+**OCR repair** fixes the characters optical recognition confuses (`l`/`I`,
+`rn`/`m`). Every rule is anchored to a word context; unanchored substitution
+would rewrite real words, which is worse than the damage it repairs.
+
+ASS/SSA files are left untouched throughout — their cues carry typesetting that
+line-level rewrites destroy, which is the standing complaint against Bazarr's
+own HI removal ([bazarr#2175](https://github.com/morpheus65535/bazarr/issues/2175)).
+
+### Forced tracks
+
+A forced track covers only signs and foreign dialogue, and looks broken if
+picked by mistake — long silences, then one line. Two independent signals are
+used, because neither is reliable alone: the release name, and cue density
+(a 100-minute film with 40 cues is not a dialogue track whatever it is called).
+
 ### Several upstreams
 
 `UPSTREAM_BASE` accepts a comma-separated list, queried in parallel and merged,
@@ -162,6 +194,10 @@ custom addon inside an aggregator.
 | `AUTO_SHIFT` | `false` | Serve timing-corrected subtitles in place of drifting ones |
 | `DROP_MISMATCHES` | `true` | Remove mismatches instead of ranking them low |
 | `MAX_RESULTS` | `0` | Cap on returned subtitles; `0` means no cap |
+| `REMOVE_HI` | `false` | Strip hearing-impaired annotations and speaker labels |
+| `FIX_UPPERCASE` | `true` | Convert all-capitals files to sentence case |
+| `FIX_OCR` | `true` | Repair `l`/`I` and `rn`/`m` confusion |
+| `DEMOTE_FORCED` | `true` | Rank signs-only tracks below full subtitles |
 | `RELABEL` | `true` | Rewrite `lang` as well as `label`. See the note below |
 | `CACHE_TTL` | `3600` | Seconds to cache a computed response |
 | `PROBE_LABELS` | `false` | Diagnostic: return one row per candidate label format |
