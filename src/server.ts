@@ -9,6 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { loadConfig, type Config } from './config.js';
 import { runPipeline } from './pipeline.js';
 import { buildProbeSubtitles } from './label/probe.js';
+import { fetchShifted, parseShiftPath } from './shift/route.js';
 import type { RawSubtitle, RequestExtras } from './types.js';
 
 /**
@@ -75,6 +76,19 @@ export function createApp(config: Config) {
 
     if (pathname === '/health') {
       return send(res, 200, JSON.stringify({ ok: true }));
+    }
+
+    const shift = parseShiftPath(pathname);
+    if (shift) {
+      const body = await fetchShifted(shift);
+      if (body === null) return send(res, 502, JSON.stringify({ err: 'upstream failed' }));
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(body);
+      return;
     }
 
     if (pathname.endsWith('/manifest.json')) {

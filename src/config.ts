@@ -35,6 +35,15 @@ export interface Config {
    * beats returning forty identical ones.
    */
   maxResults: number;
+  /**
+   * Public origin of this instance, e.g. https://subs.example.com.
+   *
+   * Required for auto-shift: corrected subtitles are served from this host, so
+   * their URLs must be absolute and reachable by the client.
+   */
+  publicUrl: string;
+  /** Serve timing-corrected subtitles in place of drifting ones. */
+  autoShift: boolean;
   addonName: string;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
@@ -73,6 +82,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     verifyLimit: int(env.VERIFY_LIMIT, 15),
     cacheTtl: int(env.CACHE_TTL, 3600),
     maxResults: Number(env.MAX_RESULTS ?? 0) || 0,
+    publicUrl: (env.PUBLIC_URL ?? '').replace(/\/+$/, ''),
+    autoShift: bool(env.AUTO_SHIFT, false),
     addonName: env.ADDON_NAME ?? 'SubRanker',
     probeLabels: bool(env.PROBE_LABELS, false),
   };

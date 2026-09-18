@@ -8,6 +8,8 @@ import { applyTimingScore, rank, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect, withAlignment } from './verify/fetch.js';
 import { align, isTrustworthy, type Timeline } from './verify/cues.js';
+import { isShiftWorthApplying } from './shift/rewrite.js';
+import { buildShiftPath, isFetchableUrl } from './shift/route.js';
 
 /** Best human-readable release string available for a candidate. */
 export function releaseTextOf(raw: RawSubtitle): string {
@@ -146,6 +148,25 @@ export async function runPipeline(
   }
 
   if (config.maxResults > 0) ordered = ordered.slice(0, config.maxResults);
+
+  // Auto-shift: alignment already measured what is wrong with the timing, so
+  // serve the corrected file rather than leaving the viewer to nudge Delay by
+  // hand. Only candidates we successfully downloaded are rewritten — if our own
+  // fetch was refused we cannot correct the file, and the client should go to
+  // the original URL untouched.
+  if (config.autoShift && config.publicUrl) {
+    ordered = ordered.map((c) => {
+      const v = c.verification;
+      if (!v?.ok || v.offset === undefined || v.rate === undefined) return c;
+      const shift = { offset: v.offset, rate: v.rate };
+      if (!isShiftWorthApplying(shift) || !isFetchableUrl(c.raw.url)) return c;
+      return {
+        ...c,
+        raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...shift, url: c.raw.url })}` },
+        reasons: [...c.reasons, 'timing corrected'],
+      };
+    });
+  }
 
   const subtitles = ordered.map((c, i) => ({
     id: c.raw.id,
