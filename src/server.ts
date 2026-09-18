@@ -121,7 +121,9 @@ export function createApp(base: Config) {
 
     if (pathname === '/health') return send(res, 200, JSON.stringify({ ok: true }));
 
-    if (pathname === '/logo.svg') {
+    // Browsers ask for this unprompted on every page load, so without a route
+    // the configure page logs a 404 against itself.
+    if (pathname === '/logo.svg' || pathname === '/favicon.ico') {
       res.writeHead(200, {
         'Content-Type': 'image/svg+xml; charset=utf-8',
         'Access-Control-Allow-Origin': '*',

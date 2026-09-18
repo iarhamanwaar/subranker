@@ -11,6 +11,10 @@ labels every row so you can tell them apart.
 
 Works for movies, TV and anime alike — nothing in it assumes a content type.
 
+<p align="center">
+  <img src="docs/configure.png" alt="The SubRanker setup page: pick your subtitle sources, then generate an install link." width="820">
+</p>
+
 ## The problem
 
 Ask a subtitle aggregator for English subtitles and you can easily get 45
