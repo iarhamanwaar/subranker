@@ -19,6 +19,12 @@ related to whether they will work.
 **Roughly half of one provider's results did not download.** Not slow, not
 malformed. Gone.
 
+Across thirteen titles against the full two-upstream production setup, 3531
+candidates were received and 6.5% dropped — but the average is the least useful
+number here. Per title it ranged from 0% (Breaking Bad, 158 candidates) to 60%
+(Demon Slayer, 12 of 20). Anime is where the dead links concentrate, and a
+single headline percentage would hide that completely.
+
 This is the single largest win and the least interesting technically. The
 aggregator never checks, because checking means fetching every candidate, and
 it is optimising for a fast response. So the user does the checking, one
@@ -29,6 +35,13 @@ Worth stating plainly: this is provider-specific. On the run recorded in
 providers that aggregate other providers are where the dead links concentrate.
 
 ## Ranking changes the answer
+
+Across the same thirteen titles, the top-ranked result was English on every
+one, and where the played filename carried a release group the top result
+matched that exact group: `yify` for the YIFY file, `rarbg` for the RARBG one,
+`vxt` for VXT, `ntb` for NTb. Most were additionally marked `timing confirmed ·
+in sync`. This is the part the project exists for, and it is the first time it
+was checked on anything other than one anime episode.
 
 On *Demon Slayer* S01E01, matching the release name moved the correct
 `erai-raws` subtitle **from 7th to 1st**. Nothing about the file changed. The
@@ -90,10 +103,27 @@ Cold request cost is dominated by network, not computation.
 | Verification downloads | 2.4–2.7s |
 | Parse, score, rank | 1–36ms |
 
-Per-file download latency is a median of 414ms and a p90 of 897ms, which is why
-the per-file timeout is 2.5s rather than something generous. A file slower than
-that is marked unverified instead of dropped: it still reaches the client, it
-just stops holding up the response.
+Per-file verification latency, measured on the deployed instance across six
+titles (88 fetches), splits sharply by outcome:
+
+| | n | p50 | p90 | max |
+|---|---|---|---|---|
+| live | 65 | 587ms | 2384ms | 2559ms |
+| dead | 23 | 374ms | 10001ms | 10003ms |
+
+Dead candidates were 26% of what was checked, and they are bimodal: most fail
+fast, the rest hang until the deadline. Since each hang costs the full timeout,
+they dominate this stage.
+
+The tempting conclusion is to shorten the timeout. The measurement says
+otherwise. At the current 2.5s, 4.6% of live files are cut off; at 2s that is
+18.5%, at 1s it is 29%. The live tail runs far past its median, so a shorter
+deadline buys a little latency by giving up a lot of verification.
+
+An earlier version of this document quoted a median of 414ms and a p90 of
+897ms. Those numbers did not survive measurement against the real provider mix,
+and the reasoning built on them — that 2.5s was generous — was backwards. It is
+close to the minimum that keeps the live tail intact.
 
 **The one real optimisation.** Comparing cue timelines was a full cross
 product, roughly 300×300 per pair, across every pair of candidates. About 30M

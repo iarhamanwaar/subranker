@@ -392,10 +392,25 @@ are cached for `CACHE_TTL` afterwards. Measured breakdown:
 
 Two things dominate, and neither is computation:
 
-**Straggler downloads.** Per-file latency measures median 414ms and p90 897ms,
-so the per-file timeout is 2.5s rather than something generous — a file slower
-than that is marked unverified rather than dropped, so it still reaches the
-client while no longer holding up the response.
+**Straggler downloads.** Measured from the deployed instance across six titles,
+88 verification fetches:
+
+| | n | p50 | p90 | max |
+|---|---|---|---|---|
+| live | 65 | 587ms | 2384ms | 2559ms |
+| dead | 23 | 374ms | 10001ms | 10003ms |
+
+Dead candidates are bimodal: most fail fast, but the rest hang until cut off,
+and they were 26% of what was checked. They dominate the stage, since each one
+costs the full timeout.
+
+That makes the timeout the obvious lever, and the measurement says not to pull
+it. At 2.5s, 4.6% of genuinely live files are cut off; at 2s that becomes 18.5%
+and at 1s, 29%. The live tail is much longer than the median suggests, so a
+shorter timeout trades a large amount of real verification for a small amount
+of saved time. A file past the deadline is marked unverified rather than
+dropped, so it still reaches the client — it simply arrives unranked by timing,
+which is the thing worth having.
 
 **Alignment used to.** Comparing two cue timelines was a full cross product,
 ~300×300 per pair, run across every pair of candidates to pick the consensus
