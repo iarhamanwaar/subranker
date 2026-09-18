@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countOverlaps, fixOverlaps, mergeOverlaps, parseCues } from '../src/shift/overlap.js';
+import { countOverlaps, detectDashStyle, fixOverlaps, mergeOverlaps, parseCues } from '../src/shift/overlap.js';
 
 describe('mergeOverlaps', () => {
   it('combines two cues that share screen time', () => {
@@ -43,7 +43,7 @@ describe('mergeOverlaps', () => {
     // two simultaneous lines, so it takes the speaker dashes.
     expect(out).toHaveLength(3);
     expect(out[0]!.text).toBe('long');
-    expect(out[1]!.text).toBe('- long\n- short');
+    expect(out[1]!.text).toBe('-long\n-short');
     expect(out[2]!.text).toBe('long');
   });
 
@@ -62,7 +62,7 @@ describe('mergeOverlaps', () => {
       { start: 2, end: 6, text: 'c' },
     ]);
     expect(countOverlaps(out)).toBe(0);
-    expect(out[out.length - 1]!.text).toBe('- a\n- b\n- c');
+    expect(out[out.length - 1]!.text).toBe('-a\n-b\n-c');
   });
 });
 
@@ -102,7 +102,7 @@ describe('two characters speaking at once', () => {
     ]);
     const both = out.find((c) => c.text.includes('\n'));
     // Without the dashes the two lines read as one run-on sentence.
-    expect(both?.text).toBe("- Get back!\n- I can't!");
+    expect(both?.text).toBe("-Get back!\n-I can't!");
     expect(countOverlaps(out)).toBe(0);
   });
 
@@ -131,5 +131,30 @@ describe('two characters speaking at once', () => {
     ]);
     const both = out.find((c) => c.text.includes('\n'));
     expect(both?.text).toBe('♪ Hold me closer ♪\nWhat are you singing?');
+  });
+});
+
+describe('dash style matches the file', () => {
+  it('detects a file that uses a space after the dash', () => {
+    expect(detectDashStyle('- Hello\n- Hi\n- There\n')).toBe('- ');
+  });
+
+  it('detects a file that uses no space', () => {
+    expect(detectDashStyle('-Hello\n-Hi\n-There\n')).toBe('-');
+  });
+
+  it('defaults to the Netflix English form when the file has neither', () => {
+    expect(detectDashStyle('Hello there\nHow are you\n')).toBe('-');
+  });
+
+  it('follows the file rather than imposing a house style', () => {
+    const spaced = mergeOverlaps(
+      [
+        { start: 0, end: 3, text: 'Get back!' },
+        { start: 1, end: 3, text: "I can't!" },
+      ],
+      '- ',
+    );
+    expect(spaced.find((c) => c.text.includes('\n'))?.text).toBe("- Get back!\n- I can't!");
   });
 });
