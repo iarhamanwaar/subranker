@@ -3,16 +3,80 @@
  *
  * Stremio addons are configured by handing the user a URL with their settings
  * encoded into it. This page builds that URL in the browser: nothing is stored
- * server-side, so one deployment serves everyone and no settings of any user
- * touch the disk.
+ * server-side, so one deployment serves everyone and no user's settings touch
+ * the disk.
  *
- * The page deliberately warns about the URL being sensitive. Upstream addon
- * URLs routinely embed API keys, so the generated link is a credential.
+ * Design note: the page presents itself as a subtitle file. Each step is a cue
+ * block with a real timecode, because the steps genuinely are a sequence, and
+ * the hero renders a caption the way a player would. The vocabulary comes from
+ * the subject rather than from decoration — timecode amber and title-safe
+ * magenta are the colours of a broadcast overlay.
  */
 import type { Config } from './config.js';
 
+/**
+ * Upstream addons offered as one-tap presets.
+ *
+ * Every entry was checked against a live subtitle request, not just its
+ * manifest: a manifest can answer 200 while the subtitles endpoint returns
+ * nothing, which is exactly how a bare, unconfigured addon fails. Addons that
+ * require their own configuration first are deliberately absent — a preset
+ * that hands someone a broken link is worse than no preset.
+ */
+export interface Preset {
+  id: string;
+  name: string;
+  blurb: string;
+  /** `{lang}` is replaced with the chosen language code. */
+  template: string;
+  /** Whether the URL varies by language. */
+  perLanguage: boolean;
+}
+
+export const PRESETS: Preset[] = [
+  {
+    id: 'subsense',
+    name: 'SubSense',
+    blurb: 'Ten sources at once, including AnimeTosho',
+    template: 'https://subsense.nepiraw.com/{lang}',
+    perLanguage: true,
+  },
+  {
+    id: 'os-v3-plus',
+    name: 'OpenSubtitles v3+',
+    blurb: 'Reports an exact file match, which outranks everything',
+    template:
+      'https://opensubtitles.stremio.homes/{lang}/ai-translated=false|from=all|auto-adjustment=true',
+    perLanguage: true,
+  },
+  {
+    id: 'os-v3',
+    name: 'OpenSubtitles v3',
+    blurb: "Stremio's official addon",
+    template: 'https://opensubtitles-v3.strem.io',
+    perLanguage: false,
+  },
+];
+
+const LANGUAGES: Array<[string, string]> = [
+  ['en', 'English'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['it', 'Italian'],
+  ['pt', 'Portuguese'],
+  ['ar', 'Arabic'],
+  ['hi', 'Hindi'],
+  ['ur', 'Urdu'],
+  ['ja', 'Japanese'],
+  ['ko', 'Korean'],
+  ['zh', 'Chinese'],
+  ['ru', 'Russian'],
+  ['tr', 'Turkish'],
+];
+
 export function configurePage(base: Config): string {
-  const defaults = {
+  const d = {
     maxResults: base.maxResults,
     autoShift: base.autoShift,
     removeHearingImpaired: base.removeHearingImpaired,
@@ -21,101 +85,280 @@ export function configurePage(base: Config): string {
     fixOverlaps: base.fixOverlaps,
     demoteForced: base.demoteForced,
   };
+  const on = (v: boolean) => (v ? ' checked' : '');
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SubRanker — setup</title>
+<title>SubRanker — set up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; --bg:#0f1115; --card:#171a21; --line:#272c36; --fg:#e8eaed; --dim:#9aa3b2; --accent:#6c5cff; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
-  h1 { font-size: 26px; margin: 0 0 4px; }
-  p.sub { color: var(--dim); margin: 0 0 28px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:18px; }
-  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 14px; }
-  label { display:block; margin-bottom:6px; font-weight:600; }
-  input[type=text], input[type=number], textarea {
-    width:100%; background:#0e1016; border:1px solid var(--line); color:var(--fg);
-    border-radius:8px; padding:10px 12px; font:inherit; font-family:ui-monospace,monospace; font-size:13px;
-  }
-  textarea { min-height:78px; resize:vertical; }
-  .hint { color:var(--dim); font-size:13px; margin-top:6px; }
-  .row { display:flex; align-items:flex-start; gap:10px; padding:9px 0; border-top:1px solid var(--line); }
-  .row:first-of-type { border-top:none; }
-  .row input { margin-top:3px; }
-  .row .t { font-weight:600; }
-  .row .d { color:var(--dim); font-size:13px; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:9px; padding:11px 18px; font:inherit; font-weight:600; cursor:pointer; }
-  button.ghost { background:#222735; }
-  #out { display:none; }
-  code { background:#0e1016; border:1px solid var(--line); border-radius:6px; padding:2px 6px; font-size:12.5px; word-break:break-all; }
-  .warn { border-left:3px solid #d08a2a; padding-left:12px; color:#e5c07b; font-size:13.5px; }
-  ol { padding-left:20px; } li { margin:6px 0; }
+:root{
+  /* Colours of a broadcast overlay: letterbox black, caption white,
+     timecode amber, title-safe magenta. */
+  --frame:#0A0B0D; --panel:#141619; --raise:#1B1E23; --line:#262A31;
+  --caption:#F5F6F7; --dim:#8A919D; --tc:#FFC24B; --safe:#FF3D7F;
+  --mono:"Chivo Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--frame);color:var(--caption);font:16px/1.6 var(--sans)}
+.wrap{max-width:820px;margin:0 auto;padding:0 20px 96px}
+
+/* hero: a letterboxed plate with a caption drawn on it */
+.plate{position:relative;margin:28px 0 8px;border:1px solid var(--line);border-radius:14px;
+  background:radial-gradient(120% 140% at 50% 0%,#191C22 0%,#0C0E11 70%);overflow:hidden}
+.plate::after{content:"";position:absolute;inset:14px;border:1px dashed rgba(255,61,127,.22);
+  border-radius:8px;pointer-events:none}
+.plate-inner{aspect-ratio:16/7;display:flex;align-items:flex-end;justify-content:center;padding:0 24px 34px}
+.cap{font-size:clamp(19px,3.4vw,30px);font-weight:600;letter-spacing:-.01em;text-align:center;
+  max-width:24ch;text-shadow:0 2px 0 #000,0 0 10px rgba(0,0,0,.85);transition:opacity .45s}
+.cap.out{opacity:0}
+.badge{position:absolute;top:14px;left:16px;font:600 11px/1 var(--mono);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--tc)}
+.rec{position:absolute;top:13px;right:16px;font:400 11px/1 var(--mono);color:var(--dim)}
+
+h1{font:600 clamp(30px,5vw,46px)/1.02 var(--sans);letter-spacing:-.035em;margin:26px 0 10px}
+h1 em{font-style:normal;color:var(--safe)}
+.lede{color:var(--dim);max-width:56ch;margin:0 0 30px}
+
+.modes{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  padding:4px;gap:4px;margin-bottom:26px}
+.modes button{appearance:none;border:0;background:transparent;color:var(--dim);font:600 13px var(--sans);
+  padding:8px 16px;border-radius:999px;cursor:pointer}
+.modes button[aria-pressed=true]{background:var(--raise);color:var(--caption)}
+.modes button:focus-visible{outline:2px solid var(--safe);outline-offset:2px}
+
+.cue{display:grid;grid-template-columns:104px 1fr;gap:20px;padding:26px 0;border-top:1px solid var(--line)}
+.cue-meta{font:400 12px/1.5 var(--mono);color:var(--tc)}
+.cue-meta b{display:block;font-weight:600;font-size:22px;color:var(--caption);margin-bottom:4px}
+.cue h2{font:600 19px/1.3 var(--sans);letter-spacing:-.015em;margin:0 0 6px}
+.cue p.note{color:var(--dim);font-size:14px;margin:0 0 16px;max-width:54ch}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);
+  color:var(--caption);border-radius:999px;padding:9px 15px 9px 11px;font:600 13px var(--sans);
+  cursor:pointer;text-align:left}
+.chip:hover{border-color:#3A404A}
+.chip:focus-visible{outline:2px solid var(--safe);outline-offset:2px}
+.chip .pl{flex:none;width:18px;height:18px;border-radius:50%;background:var(--safe);color:#12070C;
+  display:grid;place-items:center;font:700 13px/1 var(--sans)}
+.chip[aria-pressed=true]{border-color:var(--safe);background:rgba(255,61,127,.10)}
+.chip[aria-pressed=true] .pl{background:var(--caption);color:#0A0B0D}
+.chip small{display:block;color:var(--dim);font-weight:400;font-size:11.5px}
+
+label.fld{display:block;font:600 13px var(--sans);margin:0 0 7px}
+select,input[type=number],textarea{background:#0D0F12;border:1px solid var(--line);
+  color:var(--caption);border-radius:10px;padding:11px 12px;font:400 13px/1.5 var(--mono)}
+textarea{width:100%;min-height:88px;resize:vertical}
+select,input[type=number]{min-width:180px}
+:is(select,input,textarea):focus-visible{outline:2px solid var(--safe);outline-offset:1px;border-color:transparent}
+.hint{color:var(--dim);font-size:12.5px;margin:7px 0 0}
+
+.opt{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid #1E2127}
+.opt:first-of-type{border-top:0}
+.opt input{margin:4px 0 0;accent-color:var(--safe);width:17px;height:17px}
+.opt .t{font-weight:600;font-size:14.5px}
+.opt .d{color:var(--dim);font-size:13px}
+.opt code{font:400 12.5px var(--mono);color:var(--tc)}
+
+.go{appearance:none;border:0;background:var(--safe);color:#12070C;font:700 15px var(--sans);
+  padding:14px 24px;border-radius:11px;cursor:pointer;margin-top:8px}
+.go:hover{filter:brightness(1.07)}
+.go:focus-visible{outline:2px solid var(--caption);outline-offset:3px}
+
+#out{display:none;margin-top:16px}
+.link{display:flex;gap:10px;align-items:center;background:#0D0F12;border:1px solid var(--line);
+  border-radius:10px;padding:12px}
+.link code{flex:1;font:400 12.5px/1.5 var(--mono);color:var(--tc);word-break:break-all}
+.copy{appearance:none;border:1px solid var(--line);background:var(--raise);color:var(--caption);
+  border-radius:8px;padding:8px 13px;font:600 12.5px var(--sans);cursor:pointer;white-space:nowrap}
+.copy:focus-visible{outline:2px solid var(--safe);outline-offset:2px}
+.warn{border-left:2px solid var(--tc);padding:2px 0 2px 12px;color:#E8C88A;font-size:13px;margin-top:14px}
+.err{color:var(--safe);font-size:13.5px;margin:10px 0 0}
+
+.adv{display:none}
+body[data-mode=advanced] .adv{display:grid}
+footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:var(--dim);font-size:12.5px}
+
+@media (max-width:640px){
+  .cue{grid-template-columns:1fr;gap:10px}
+  .cue-meta{display:flex;align-items:baseline;gap:10px}
+  .cue-meta b{margin:0;font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){ .cap{transition:none} }
 </style>
 </head>
-<body><div class="wrap">
-<h1>SubRanker</h1>
-<p class="sub">Ranks, verifies and repairs subtitles so the best match for what you are playing is first.</p>
+<body data-mode="simple">
+<div class="wrap">
 
-<div class="card">
-  <h2>Upstream subtitle addons</h2>
-  <label for="ups">One URL per line, without <code>/manifest.json</code></label>
-  <textarea id="ups" spellcheck="false" placeholder="https://subsense.example/en&#10;https://opensubtitles.example/en/..."></textarea>
-  <p class="hint">Several are queried in parallel and merged. Worth doing: providers expose different metadata, and some report an exact file hash while aggregators cover more sources.</p>
-</div>
+  <div class="plate">
+    <span class="badge">SubRanker</span>
+    <span class="rec">01:00:00:00</span>
+    <div class="plate-inner"><div class="cap" id="cap">The right subtitle, first in the list.</div></div>
+  </div>
 
-<div class="card">
-  <h2>Options</h2>
-  <div class="row"><input type="checkbox" id="autoShift" ${defaults.autoShift ? 'checked' : ''}><div><div class="t">Fix timing</div><div class="d">Serve a corrected file when a subtitle is late or drifting.</div></div></div>
-  <div class="row"><input type="checkbox" id="fixOverlaps" ${defaults.fixOverlaps ? 'checked' : ''}><div><div class="t">Merge overlapping cues</div><div class="d">Stops two lines being drawn on top of each other.</div></div></div>
-  <div class="row"><input type="checkbox" id="removeHearingImpaired" ${defaults.removeHearingImpaired ? 'checked' : ''}><div><div class="t">Remove hearing-impaired tags</div><div class="d">Strips <code>[DOOR CREAKS]</code> and speaker labels, turning an SDH track into an ordinary subtitle. Rewrites dialogue, so opt in deliberately.</div></div></div>
-  <div class="row"><input type="checkbox" id="fixOcr" ${defaults.fixOcr ? 'checked' : ''}><div><div class="t">Repair OCR damage</div><div class="d">Fixes the characters scanners confuse, such as <code>l</code> for <code>I</code>.</div></div></div>
-  <div class="row"><input type="checkbox" id="fixUppercase" ${defaults.fixUppercase ? 'checked' : ''}><div><div class="t">Fix shouting</div><div class="d">Converts files written entirely in capitals to sentence case.</div></div></div>
-  <div class="row"><input type="checkbox" id="demoteForced" ${defaults.demoteForced ? 'checked' : ''}><div><div class="t">Demote forced tracks</div><div class="d">Signs-only tracks rank below full subtitles.</div></div></div>
-  <div class="row"><div style="flex:1"><label for="maxResults">Maximum results</label><input type="number" id="maxResults" min="0" max="50" value="${defaults.maxResults}"><div class="hint">0 means no limit. A short list helps on clients that show every row with the same name.</div></div></div>
-</div>
+  <h1>Stop guessing which subtitle <em>works</em>.</h1>
+  <p class="lede">SubRanker sits in front of the subtitle addons you already use. It ranks them against the release you are actually playing, drops the dead ones, and repairs the rest.</p>
 
-<div class="card">
-  <h2>Separate row per position</h2>
-  <div class="row"><input type="checkbox" id="splitRanks"><div><div class="t">Generate one install link per position</div><div class="d">Some clients label every row with the addon's name and ignore the per-subtitle label, so all rows look identical. Installing several instances gives each row its own name.</div></div></div>
-</div>
+  <div class="modes" role="group" aria-label="Detail level">
+    <button type="button" id="mSimple" aria-pressed="true">Simple</button>
+    <button type="button" id="mAdv" aria-pressed="false">Advanced</button>
+  </div>
 
-<p><button id="go">Generate install link</button></p>
+  <section class="cue">
+    <div class="cue-meta"><b>1</b>00:00:00,000<br>&rarr; 00:00:12,000</div>
+    <div>
+      <h2>Pick your sources</h2>
+      <p class="note">Tap to add. Several are queried at once and merged, which is worth doing because they carry different information — one may know the exact file, another simply covers more ground.</p>
+      <div class="chips" id="chips"></div>
+      <label class="fld" for="lang">Subtitle language</label>
+      <select id="lang">${LANGUAGES.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select>
+      <p class="hint">Applies to the sources above. Ones without a language setting ignore it.</p>
+      <div style="margin-top:16px">
+        <label class="fld" for="ups">Sources to use</label>
+        <textarea id="ups" spellcheck="false" placeholder="Tap a source above, or paste an addon URL here — one per line."></textarea>
+      </div>
+    </div>
+  </section>
 
-<div class="card" id="out">
-  <h2>Install</h2>
-  <div id="links"></div>
-  <p class="warn">Treat these links as secret. Upstream addon URLs often contain an API key, and it is encoded into the link.</p>
+  <section class="cue adv">
+    <div class="cue-meta"><b>2</b>00:00:12,000<br>&rarr; 00:00:26,000</div>
+    <div>
+      <h2>Repairs</h2>
+      <p class="note">Applied to the file before it reaches your player.</p>
+      <div class="opt"><input type="checkbox" id="autoShift"${on(d.autoShift)}><div><div class="t">Fix timing</div><div class="d">Corrects subtitles that run late or drift out of sync.</div></div></div>
+      <div class="opt"><input type="checkbox" id="fixOverlaps"${on(d.fixOverlaps)}><div><div class="t">Separate overlapping lines</div><div class="d">Stops two lines being drawn on top of each other when people talk at once.</div></div></div>
+      <div class="opt"><input type="checkbox" id="removeHearingImpaired"${on(d.removeHearingImpaired)}><div><div class="t">Remove sound descriptions</div><div class="d">Strips <code>[DOOR CREAKS]</code> and speaker names. Rewrites the dialogue, so turn it on deliberately.</div></div></div>
+      <div class="opt"><input type="checkbox" id="fixOcr"${on(d.fixOcr)}><div><div class="t">Repair scanning errors</div><div class="d">Fixes characters that scanners confuse, such as <code>l</code> for <code>I</code>.</div></div></div>
+      <div class="opt"><input type="checkbox" id="fixUppercase"${on(d.fixUppercase)}><div><div class="t">Fix shouting</div><div class="d">Converts files written entirely in capitals to normal sentences.</div></div></div>
+    </div>
+  </section>
+
+  <section class="cue adv">
+    <div class="cue-meta"><b>3</b>00:00:26,000<br>&rarr; 00:00:38,000</div>
+    <div>
+      <h2>What you see</h2>
+      <p class="note">How much of the ranked list reaches your player.</p>
+      <div class="opt"><input type="checkbox" id="demoteForced"${on(d.demoteForced)}><div><div class="t">Push signs-only tracks down</div><div class="d">Tracks that translate only signs look broken if picked by mistake.</div></div></div>
+      <div style="margin-top:14px">
+        <label class="fld" for="maxResults">Show at most</label>
+        <input type="number" id="maxResults" min="0" max="50" value="${d.maxResults}">
+        <p class="hint">0 shows everything. Many players label every row identically, so a short list is easier to use than a long one.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cue">
+    <div class="cue-meta"><b>4</b>00:00:38,000<br>&rarr; 00:00:50,000</div>
+    <div>
+      <h2>Install</h2>
+      <p class="note">Your settings live inside the link, so nothing is kept here.</p>
+      <button class="go" type="button" id="go">Create install link</button>
+      <p class="err" id="err" hidden></p>
+      <div id="out">
+        <div class="link"><code id="url"></code><button class="copy" type="button" id="copy">Copy</button></div>
+        <p class="warn">Keep this link private. Source addresses often contain your own API key, and it is part of the link.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>Paste the link into Stremio, or add it as a custom addon inside an aggregator such as AIOStreams.</footer>
 </div>
 
 <script>
 (function () {
-  var origin = location.origin;
-  function b64url(s) {
-    return btoa(unescape(encodeURIComponent(s))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
+  var PRESETS = ${JSON.stringify(PRESETS)};
+  var chips = document.getElementById('chips');
+  var ups = document.getElementById('ups');
+  var lang = document.getElementById('lang');
+
+  function urlFor(p) { return p.template.replace('{lang}', p.perLanguage ? lang.value : ''); }
+  function lines() { return ups.value.split(/\\n+/).map(function (s) { return s.trim(); }).filter(Boolean); }
+  function setLines(list) { ups.value = list.join('\\n'); }
+
+  function syncChips() {
+    var current = lines();
+    PRESETS.forEach(function (p) {
+      var el = document.getElementById('chip-' + p.id);
+      var isOn = current.indexOf(urlFor(p)) !== -1;
+      el.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+      el.querySelector('.pl').textContent = isOn ? '\\u2713' : '+';
+    });
   }
+
+  PRESETS.forEach(function (p) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.id = 'chip-' + p.id;
+    b.setAttribute('aria-pressed', 'false');
+    var plus = document.createElement('span'); plus.className = 'pl'; plus.textContent = '+';
+    var txt = document.createElement('span');
+    var nm = document.createElement('span'); nm.textContent = p.name;
+    var sm = document.createElement('small'); sm.textContent = p.blurb;
+    txt.appendChild(nm); txt.appendChild(sm);
+    b.appendChild(plus); b.appendChild(txt);
+    b.addEventListener('click', function () {
+      var u = urlFor(p);
+      var current = lines();
+      var at = current.indexOf(u);
+      if (at === -1) current.push(u); else current.splice(at, 1);
+      setLines(current); syncChips();
+    });
+    chips.appendChild(b);
+  });
+
+  // Changing language rewrites presets already chosen, so the list never keeps
+  // a stale language behind.
+  lang.addEventListener('change', function () {
+    var current = lines();
+    PRESETS.filter(function (p) { return p.perLanguage; }).forEach(function (p) {
+      var stem = p.template.split('{lang}')[0];
+      for (var i = 0; i < current.length; i++) {
+        if (current[i].indexOf(stem) === 0) current[i] = urlFor(p);
+      }
+    });
+    setLines(current); syncChips();
+  });
+  ups.addEventListener('input', syncChips);
+
+  var simple = document.getElementById('mSimple');
+  var adv = document.getElementById('mAdv');
+  function mode(m) {
+    document.body.dataset.mode = m;
+    simple.setAttribute('aria-pressed', String(m === 'simple'));
+    adv.setAttribute('aria-pressed', String(m === 'advanced'));
+  }
+  simple.addEventListener('click', function () { mode('simple'); });
+  adv.addEventListener('click', function () { mode('advanced'); });
+
+  function b64url(s) {
+    return btoa(unescape(encodeURIComponent(s))).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  }
+
+  var out = document.getElementById('out');
+  var err = document.getElementById('err');
+  var urlEl = document.getElementById('url');
+
   document.getElementById('go').addEventListener('click', function () {
-    var ups = document.getElementById('ups').value.split(/\\n+/)
-      .map(function (s) { return s.trim().replace(/\\/manifest\\.json$/, '').replace(/\\/+$/, ''); })
+    var list = lines()
+      .map(function (s) { return s.replace(/\\/manifest\\.json$/, '').replace(/\\/+$/, ''); })
       .filter(function (s) { return /^https?:\\/\\//.test(s); });
-    var out = document.getElementById('out');
-    var links = document.getElementById('links');
-    if (!ups.length) {
-      links.textContent = '';
-      var warn = document.createElement('p');
-      warn.className = 'warn';
-      warn.textContent = 'Add at least one upstream URL.';
-      links.appendChild(warn);
-      out.style.display = 'block';
+
+    if (!list.length) {
+      err.hidden = false;
+      err.textContent = 'Add at least one source before creating a link.';
+      out.style.display = 'none';
       return;
     }
+    err.hidden = true;
 
     var cfg = {
-      upstreams: ups,
+      upstreams: list,
       maxResults: parseInt(document.getElementById('maxResults').value, 10) || 0,
       autoShift: document.getElementById('autoShift').checked,
       fixOverlaps: document.getElementById('fixOverlaps').checked,
@@ -124,39 +367,42 @@ export function configurePage(base: Config): string {
       fixUppercase: document.getElementById('fixUppercase').checked,
       demoteForced: document.getElementById('demoteForced').checked
     };
-    var seg = b64url(JSON.stringify(cfg));
-
-    // Built with DOM nodes rather than innerHTML. The values here are
-    // base64url and an origin, so concatenation would be safe today, but a
-    // page that renders user-derived strings should not depend on that
-    // staying true.
-    links.textContent = '';
-    function codeLine(text) {
-      var code = document.createElement('code');
-      code.textContent = text;
-      return code;
-    }
-    if (document.getElementById('splitRanks').checked) {
-      var n = cfg.maxResults > 0 ? Math.min(cfg.maxResults, 10) : 6;
-      var ol = document.createElement('ol');
-      for (var i = 1; i <= n; i++) {
-        var li = document.createElement('li');
-        li.appendChild(codeLine(origin + '/c/' + seg + '/r/' + i + '/manifest.json'));
-        ol.appendChild(li);
-      }
-      links.appendChild(ol);
-      var note = document.createElement('p');
-      note.className = 'hint';
-      note.textContent = 'Install all of them, in order. Each supplies one position and carries its own name.';
-      links.appendChild(note);
-    } else {
-      var p = document.createElement('p');
-      p.appendChild(codeLine(origin + '/c/' + seg + '/manifest.json'));
-      links.appendChild(p);
-    }
+    // textContent, not innerHTML: this string is built from user input.
+    urlEl.textContent = location.origin + '/c/' + b64url(JSON.stringify(cfg)) + '/manifest.json';
     out.style.display = 'block';
   });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    navigator.clipboard.writeText(urlEl.textContent).then(function () {
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+    });
+  });
+
+  // One orchestrated moment: the plate cycles captions the way a player would.
+  var cap = document.getElementById('cap');
+  var LINES = [
+    'The right subtitle, first in the list.',
+    'Dead links never reach you.',
+    'Late by 2.5 seconds? Corrected.',
+    'Two people talking at once stay readable.'
+  ];
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var i = 0;
+    setInterval(function () {
+      cap.classList.add('out');
+      setTimeout(function () {
+        i = (i + 1) % LINES.length;
+        cap.textContent = LINES[i];
+        cap.classList.remove('out');
+      }, 450);
+    }, 4200);
+  }
+
+  syncChips();
 })();
 </script>
-</div></body></html>`;
+</body>
+</html>`;
 }
