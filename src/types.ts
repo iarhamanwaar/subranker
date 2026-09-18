@@ -92,6 +92,8 @@ export interface Verification {
   rate?: number;
   /** Fraction of cues that line up with the reference after alignment. */
   agreement?: number;
+  /** Strength of the best competing offset; see Alignment.runnerUp. */
+  runnerUp?: number;
   /** Promotional cues detected in the file. */
   adCues?: number;
   /** Encoding the bytes were actually in. */

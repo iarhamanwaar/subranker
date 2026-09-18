@@ -247,7 +247,11 @@ export async function runPipeline(
       const v = c.verification;
       if (!v?.ok || v.offset === undefined || v.rate === undefined) return c;
       const shift = { offset: v.offset, rate: v.rate };
-      const needsShift = isShiftSafeToApply(shift, v.agreement);
+      const needsShift = isShiftSafeToApply(shift, v.agreement, {
+        ...shift,
+        agreement: v.agreement ?? 0,
+        ...(v.runnerUp !== undefined ? { runnerUp: v.runnerUp } : {}),
+      });
       const hasAds = (v.adCues ?? 0) > 0;
       const badEncoding = v.encodingRepaired === true;
 

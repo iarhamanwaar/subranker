@@ -157,5 +157,5 @@ export function withAlignment(
 ): Verification {
   if (!verification.ok || reference.length === 0) return verification;
   const a = align(timeline, reference);
-  return { ...verification, offset: a.offset, rate: a.rate, agreement: a.agreement };
+  return { ...verification, offset: a.offset, rate: a.rate, agreement: a.agreement, runnerUp: a.runnerUp };
 }

@@ -11,7 +11,7 @@
  */
 import { loadConfig } from '../src/config.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect } from '../src/verify/fetch.js';
-import { align, isTrustworthy } from '../src/verify/cues.js';
+import { align, isTrustworthy, isAmbiguous } from '../src/verify/cues.js';
 import { buildCandidates, consensusTimeline } from '../src/pipeline.js';
 import { scoreAll, rank } from '../src/score/score.js';
 import { parseRelease } from '../src/parse/release.js';
@@ -33,8 +33,13 @@ const TITLES: Array<[string, string]> = [
   ['series/tt9335498:1:1', 'Demon Slayer - Kimetsu no Yaiba - S01E01 - Cruelty Bluray-1080p.mkv'],
   ['series/tt2560140:1:1', '[Erai-raws] Shingeki no Kyojin - 01 [1080p][Multiple Subtitle].mkv'],
   ['series/tt0877057:1:1', '[HorribleSubs] Death Note - 01 [1080p].mkv'],
+  // The complaint that motivated the ambiguity guard.
+  ['series/tt9335498:1:8', 'Demon Slayer - Kimetsu no Yaiba - S01E08 - The Smell of Enchanting Blood Bluray-1080p.mkv'],
+  ['series/tt9335498:1:7', 'Demon Slayer - Kimetsu no Yaiba - S01E07 - Muzan Kibutsuji Bluray-1080p.mkv'],
+  ['series/tt1528406:1:24', 'Fairy Tail (2009) - S01E24 - To Keep From Seeing Those Tears [Bluray-1080p][Opus 2.0][AV1]-BlackRabbit.mkv'],
 ];
 
+const shifted: Array<{ title: string; offset: number; agreement: number; ratio: number; ambiguous: boolean }> = [];
 let live = 0, noConsensus = 0, untrusted = 0, tooFar = 0, applied = 0, alreadyInSync = 0;
 const rejected: Array<{ title: string; offset: number; rate: number; agreement: number }> = [];
 
@@ -82,6 +87,10 @@ for (const [id, filename] of TITLES) {
       continue;
     }
     applied++;
+    shifted.push({
+      title: filename.slice(0, 28), offset: a.offset, agreement: a.agreement,
+      ratio: (a.runnerUp ?? 0) / a.agreement, ambiguous: isAmbiguous(a),
+    });
   }
 }
 
@@ -98,4 +107,10 @@ if (rejected.length) {
   for (const r of rejected.slice(0, 14)) {
     console.log(`  ${r.title.padEnd(30)} ${r.offset.toFixed(1).padStart(8)}s  rate=${r.rate.toFixed(3)}  agree=${r.agreement.toFixed(2)}`);
   }
+}
+
+console.log(`\nshifts the old guard applied: ${shifted.length}; now blocked as ambiguous: ${shifted.filter((x) => x.ambiguous).length}`);
+console.log('every applied shift (offset / agreement / runner-up ratio):');
+for (const x of shifted.sort((p, q) => q.ratio - p.ratio)) {
+  console.log(`  ${x.ambiguous ? 'BLOCK' : 'keep '} ${x.title.padEnd(30)} ${x.offset.toFixed(2).padStart(7)}s  agree=${x.agreement.toFixed(2)}  ratio=${x.ratio.toFixed(2)}`);
 }

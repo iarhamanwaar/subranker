@@ -11,6 +11,7 @@
  * `rate` handles progressive drift from a framerate mismatch, which no amount
  * of delay adjustment in the player can fix. `offset` handles a constant lag.
  */
+import { isAmbiguous, type Alignment } from '../verify/cues.js';
 
 /** Below this, a shift is not worth rewriting a file for. */
 export const MIN_SHIFT_SECONDS = 0.3;
@@ -47,8 +48,14 @@ export const MIN_APPLY_AGREEMENT = 0.5;
  * Deliberately stricter than `isShiftWorthApplying`: that asks "is this
  * non-trivial", this asks "do we believe it".
  */
-export function isShiftSafeToApply(shift: Shift, agreement: number | undefined): boolean {
+export function isShiftSafeToApply(
+  shift: Shift,
+  agreement: number | undefined,
+  alignment?: Alignment,
+): boolean {
   if (!isShiftWorthApplying(shift)) return false;
+  // Two competing offsets mean two cuts; any single shift breaks one of them.
+  if (alignment && isAmbiguous(alignment)) return false;
   if (Math.abs(shift.offset) > MAX_APPLY_OFFSET_SECONDS) return false;
   if (agreement === undefined || agreement < MIN_APPLY_AGREEMENT) return false;
   return true;

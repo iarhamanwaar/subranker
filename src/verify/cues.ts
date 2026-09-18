@@ -79,6 +79,18 @@ export interface Alignment {
   rate: number;
   /** Fraction of candidate cues that land near a reference cue, 0..1. */
   agreement: number;
+  /**
+   * Agreement of the strongest competing offset, at the same rate, more than
+   * a second away from the chosen one.
+   *
+   * Two cuts of the same episode produce two peaks: one half of the file lines
+   * up at one offset and the rest at another. The best peak then wins with an
+   * agreement that looks acceptable, and applying it breaks the other half.
+   * Measured on Demon Slayer S01E08: +1s for the cold open, -7s after it, and
+   * the -7.25s "correction" moved a file that was right at 2:50 seven seconds
+   * early.
+   */
+  runnerUp?: number;
 }
 
 /**
@@ -119,8 +131,10 @@ export function align(
   let best = empty;
   let identityAgreement = 0;
 
+  const hists = new Map<number, Map<number, number>>();
   for (const rate of rates) {
     const hist = new Map<number, number>();
+    hists.set(rate, hist);
     // Both timelines are sorted, so the reference cues within +/-MAX_OFFSET of
     // a given candidate cue form a contiguous run. Walking that window with
     // two pointers replaces the full cross product: with a 30s window over a
@@ -158,7 +172,36 @@ export function align(
     });
   }
 
-  return best;
+  // Strongest peak at the winning rate that is not simply the chosen peak's
+  // own spread across neighbouring bins.
+  const SEPARATION_BINS = Math.round(1 / BIN);
+  const bestBin = Math.round(best.offset / BIN);
+  let runnerUp = 0;
+  for (const [bin, count] of hists.get(best.rate) ?? []) {
+    if (Math.abs(bin - bestBin) <= SEPARATION_BINS) continue;
+    const agreement = Math.min(count / Math.min(candidate.length, reference.length), 1);
+    if (agreement > runnerUp) runnerUp = agreement;
+  }
+
+  return { ...best, runnerUp };
+}
+
+/**
+ * Runner-up strength, relative to the winner, at which a single offset stops
+ * being a believable description of the file.
+ */
+export const AMBIGUITY_RATIO = 0.5;
+
+/**
+ * Whether the file is better explained by more than one offset.
+ *
+ * When it is, there is no correct global shift: whichever peak is applied,
+ * the part of the file that followed the other one gets worse. The honest
+ * response is to leave the file alone.
+ */
+export function isAmbiguous(a: Alignment): boolean {
+  if (!a.runnerUp || a.agreement <= 0) return false;
+  return a.runnerUp / a.agreement >= AMBIGUITY_RATIO;
 }
 
 /**
