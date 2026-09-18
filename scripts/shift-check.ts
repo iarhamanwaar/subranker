@@ -5,7 +5,7 @@ const BASE = process.env.UPSTREAM_BASE!;
 const cfg: any = {
   upstreamBase: BASE, relabel: false, dropMismatches: true, verify: true,
   verifyLimit: 15, cacheTtl: 0, addonName: 'x', port: 0, maxResults: 6,
-  publicUrl: 'https://subs.bugvi.org', autoShift: true, probeLabels: false,
+  publicUrl: process.env.PUBLIC_URL ?? 'https://example.invalid', autoShift: true, probeLabels: false,
 };
 for (const [ep, fn] of [
   ['tt9335498:1:1', 'Demon Slayer - Kimetsu no Yaiba - S01E01 - Cruelty Bluray-1080p.mkv'],

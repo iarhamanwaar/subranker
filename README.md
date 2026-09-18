@@ -1,78 +1,137 @@
 # SubRanker
 
-A Stremio addon that sits in front of any subtitle addon and makes the list
+A Stremio addon that sits in front of your subtitle addons and makes the list
 usable: it ranks candidates against the release you are actually playing,
-removes dead and mismatched tracks, and rewrites each row so you can tell them
-apart.
+removes the ones that are dead or wrong, repairs the ones that are fixable, and
+labels every row so you can tell them apart.
 
 Works for movies, TV and anime alike — nothing in it assumes a content type.
 
 ## The problem
 
 Ask a subtitle aggregator for English subtitles and you can easily get 45
-results. Three things then go wrong, and all three were measured on a live setup
-rather than guessed:
+results. Four things then go wrong, and every number below was measured on a
+live setup rather than assumed:
 
-**They look identical.** Stremio's subtitle object carries only `id`, `url` and
-`lang`, and the client renders the language verbatim. Addons that attach
-`label` or `releaseName` are ignored. So 45 English subtitles render as 45 rows
-reading "English", and you pick blind.
+**They look identical.** Stremio renders the addon's name against every row, so
+forty-five results appear as forty-five copies of the same line and you pick
+blind.
 
 **Many are dead.** Roughly half of one provider's links returned 404 — from a
 home connection and a datacenter alike. Choosing one is a silent failure.
 
 **They are cut for different videos.** Three "English S01E01" tracks for the
 same episode had last cues at 21:06, 23:24 and 23:36 — a 150-second spread.
-Two legitimate ones still differed by 262ms, which is invisible in a list and
-very visible on screen. A third was timed to the English dub, putting its first
-cue at 6.2s against 25.4s for the subbed tracks.
+Two otherwise-good ones still differed by 262ms, invisible in a list and very
+visible on screen. A third was timed to the English dub, putting its first cue
+at 6.2s against 25.4s for the subbed tracks.
 
-More subtitles does not fix any of that. Ranking does.
+**Some are mis-encoded.** 3 of 22 files sampled were not valid UTF-8. They
+render as mojibake — `café` as `cafÃ©`, Japanese as `ã‚ãŒã¦` — which reads as
+a bad translation rather than a broken file.
+
+More subtitles fixes none of that. Ranking and repair do.
 
 ## What it does
 
 ```
-client → subranker → your subtitle addon → providers
+client → subranker → your subtitle addons → providers
              │
-             └── parse · verify · score · rank · relabel
+             └── parse · verify · score · rank · repair · label
 ```
 
 1. **Parse** every candidate's release name, and the filename of the stream
    being played.
 2. **Verify** the top candidates by downloading them in parallel: drop dead
-   links, then align each cue timeline against a reference to measure offset
-   and framerate drift.
-3. **Score** on matched properties, modelled on Subliminal: release group
-   weighted heavily, then source, resolution, episode and season. An exact
-   file-hash match outweighs the sum of everything else.
+   links, decode them properly, and align each cue timeline against a
+   reference to measure offset and framerate drift.
+3. **Score** on matched properties, modelled on Subliminal. Release group
+   weighs heaviest, then source, resolution, episode, season. An exact
+   file-hash match outweighs the sum of everything else. Stated disagreements
+   are penalised, not merely unrewarded.
 4. **Rank**, dropping clear mismatches.
-5. **Relabel** so rows read `01. English · erai-raws · in sync` instead of
-   forty-five identical "English".
+5. **Repair** what is fixable: timing, advertising cues, character encoding.
+6. **Label** each row so it reads `1. erai-raws 1080p (in sync)` rather than
+   the addon's name repeated down the list.
 
-### Content-type handling
+## Features
 
-Content type cannot be inferred from the Stremio id — Demon Slayer arrives as a
-plain IMDb id yet ships fansub-style release names. So every candidate is run
+### Ranking
+
+Content type cannot be inferred from the Stremio id — Demon Slayer arrives as
+a plain IMDb id yet ships fansub-style release names. So every candidate is run
 through both an anime parser ([anitomy-ng](https://www.npmjs.com/package/anitomy-ng),
 a WebAssembly build with no native dependencies) and a Radarr-style parser
 ([@ctrl/video-filename-parser](https://www.npmjs.com/package/@ctrl/video-filename-parser)),
 and the higher-confidence result wins, with fields merged.
 
-### Timing verification
+Players are often fed library-renamed files — `Demon Slayer - S01E01 - Cruelty
+Bluray-1080p.mkv` names the source and resolution but no release group — so
+when the release group is missing, measured timing agreement carries the
+decision instead.
 
-Alignment compares a candidate's cue timeline against a reference timeline
-rather than against audio. No video is decoded and no bytes of the stream are
-fetched, so it takes milliseconds rather than the 20–30 seconds an audio-based
-aligner such as ffsubsync needs. It tries the usual framerate ratios
-(23.976 ↔ 25 ↔ 24), so subtitles that *drift* are distinguished from subtitles
-that are merely *late*.
-
-### Dub handling
+### Dub and SDH handling
 
 A dub-timed track is treated as a sync failure rather than a preference: a dub
 is a different vocal performance, so its cues drift against the original audio.
 SDH tracks are only demoted when a non-SDH alternative survives, so an obscure
 title never returns an empty list.
+
+### Timing verification and correction
+
+Alignment compares a candidate's cue timeline against a reference timeline
+rather than against audio. No video is decoded and no bytes of the stream are
+fetched, so it takes milliseconds rather than the 20–30 seconds an audio-based
+aligner such as ffsubsync needs. The usual framerate ratios (23.976 ↔ 25 ↔ 24)
+are tried, so subtitles that *drift* are distinguished from ones that are
+merely *late*.
+
+With `AUTO_SHIFT`, the measurement is then applied — `corrected = original *
+rate + offset` — and the corrected file is served in place of the original. The
+rate term is the one that matters: a framerate mismatch drifts progressively
+and no amount of delay adjustment in the player can fix it.
+
+Two safeguards, both learned the hard way:
+
+- **The anchor must command a majority.** Picking the most central timeline
+  says nothing about whether a consensus *exists*; with every candidate a
+  different cut, the "best" reference is still one nobody agrees with. Below a
+  majority, alignment is skipped entirely.
+- **A non-1 rate must win by a margin.** Stretching a timeline by 4.2%
+  manufactures enough coincidences to beat the truth, so the identity
+  hypothesis is preferred unless drift is clearly better.
+
+A shift is only applied when it is believable: within 30 seconds, and backed by
+real agreement. A 134-second "correction" is not a lag, it is a different cut,
+and sliding the timeline would only hide that.
+
+### Advertising removal
+
+Providers inject promotional cues into the files they serve. Detection is
+conservative — a known promotional pattern **and** a position within 90s of
+either end — so mid-film dialogue mentioning a website survives.
+
+### Character-encoding repair
+
+Two faults are handled. **Legacy encodings** (Windows-1252, Shift_JIS, CP1256,
+Big5, EUC-KR and others): every legacy decoder produces output for any bytes,
+so candidates are scored for plausibility rather than trusting any one.
+**Double encoding**, where the file is valid UTF-8 but its text was already
+mangled upstream; the reverse mapping uses Windows-1252 rather than Latin-1,
+because `don’t` mangles to `donâ€™t` whose `€` and `™` are above U+00FF and
+cannot be expressed in Latin-1 at all. A repair is kept only when it makes the
+text more plausible, since the same operation on correct text destroys it.
+
+### Several upstreams
+
+`UPSTREAM_BASE` accepts a comma-separated list, queried in parallel and merged,
+deduplicated on URL, with ids namespaced per upstream. A failing upstream
+degrades the list rather than emptying it.
+
+The motivation is metadata, not volume: some providers report `moviehash` — the
+exact-file signal that outweighs everything else in scoring — while aggregators
+cover far more sources but report no hash. Querying both gets the breadth of
+one and the certainty of the other.
 
 ## Setup
 
@@ -84,22 +143,53 @@ cp .env.example .env     # set UPSTREAM_BASE
 pnpm build && pnpm start
 ```
 
-Then install `https://your-host/manifest.json` in Stremio.
+Then install `https://your-host/manifest.json` in Stremio, or add it as a
+custom addon inside an aggregator.
 
-> **Never commit your `UPSTREAM_BASE`.** Addon URLs frequently embed API keys in
-> their config segment.
+> **Never commit your `UPSTREAM_BASE`.** Addon URLs frequently embed API keys
+> in their config segment.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `UPSTREAM_BASE` | *(required)* | Upstream subtitle addon, without `/manifest.json` |
+| `UPSTREAM_BASE` | *(required)* | Upstream subtitle addon(s), without `/manifest.json`. Comma-separated for several |
 | `PORT` | `7010` | Loopback bind port |
-| `RELABEL` | `true` | Rewrite `lang` so rows are distinguishable |
-| `DROP_MISMATCHES` | `true` | Remove mismatches instead of ranking them low |
-| `VERIFY` | `true` | Download top candidates to check liveness and timing |
+| `PUBLIC_URL` | *(none)* | Public origin of this instance. Required by `AUTO_SHIFT` |
+| `ADDON_NAME` | `SubRanker` | Name reported in the manifest |
+| `VERIFY` | `true` | Download top candidates to check liveness, encoding and timing |
 | `VERIFY_LIMIT` | `15` | How many to download per request |
+| `AUTO_SHIFT` | `false` | Serve timing-corrected subtitles in place of drifting ones |
+| `DROP_MISMATCHES` | `true` | Remove mismatches instead of ranking them low |
+| `MAX_RESULTS` | `0` | Cap on returned subtitles; `0` means no cap |
+| `RELABEL` | `true` | Rewrite `lang` as well as `label`. See the note below |
 | `CACHE_TTL` | `3600` | Seconds to cache a computed response |
+| `PROBE_LABELS` | `false` | Diagnostic: return one row per candidate label format |
+
+### A note on `RELABEL`
+
+Stremio's subtitle type carries both a `lang` and a `label`
+([stremio-core](https://github.com/Stremio/stremio-core/blob/development/src/types/resource/subtitles.rs)).
+SubRanker always sets `label`, which is free text and is what makes rows
+distinguishable.
+
+`RELABEL` additionally rewrites `lang`. That is **off by default and generally
+a bad idea**: the Android TV client maps `lang` through a language dictionary
+and renders an **empty row** for anything it does not recognise, so a
+descriptive `lang` disappears entirely. `PROBE_LABELS=true` exists to find out
+what your own client does — it returns the same subtitle once per candidate
+format, and whichever rows appear are the formats that client will render.
+
+### A note on clients
+
+Stremio can append `videoHash`, `videoSize` and `filename` to subtitle
+requests, and those extras are what make exact matching possible. Not every
+client sends them — the Android TV and web clients were reported to omit the
+segment ([stremio-addon-sdk#221](https://github.com/Stremio/stremio-addon-sdk/issues/221)),
+though it is fixed in current Android TV builds. SubRanker degrades
+gracefully: without extras it still prunes dead links, removes dub-timed
+tracks, repairs encodings, verifies timing and labels rows. With them, ranking
+becomes exact.
 
 ## Development
 
@@ -108,18 +198,13 @@ pnpm test        # unit tests
 pnpm typecheck
 pnpm dev         # watch mode
 
-UPSTREAM_BASE=… pnpm exec tsx scripts/e2e.ts   # run against a live addon
+UPSTREAM_BASE=… pnpm exec tsx scripts/e2e.ts          # run against a live addon
+UPSTREAM_BASE=… pnpm exec tsx scripts/label-check.ts  # preview the row labels
+UPSTREAM_BASE=… pnpm exec tsx scripts/shift-check.ts  # inspect proposed shifts
 ```
 
-## A note on client behaviour
-
-Stremio can append `videoHash`, `videoSize` and `filename` to subtitle requests,
-and those extras are what make exact matching possible. Not every client sends
-them — the Android TV and web clients have been reported to omit the segment
-([stremio-addon-sdk#221](https://github.com/Stremio/stremio-addon-sdk/issues/221)).
-SubRanker degrades gracefully: without extras it still prunes dead links,
-removes dub-timed tracks, verifies timing and relabels. With them, ranking
-becomes exact.
+Fixtures throughout the test suite are real release names and real failure
+modes observed in live responses, not invented examples.
 
 ## License
 

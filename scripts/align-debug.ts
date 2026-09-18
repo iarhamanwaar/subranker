@@ -1,9 +1,11 @@
 import { align, parseTimeline, RATE_CANDIDATES } from '../src/verify/cues.js';
 
-const urls = [
-  'https://subsense.nepiraw.com/en/subtitles/series/tt9335498:1:1.json',
-];
-const list = (await (await fetch(urls[0]!)).json()) as { subtitles: { id: string; url: string }[] };
+const BASE = process.env.UPSTREAM_BASE;
+if (!BASE) throw new Error('set UPSTREAM_BASE to the addon you want to inspect');
+const ID = process.env.ID ?? 'series/tt9335498:1:1';
+const list = (await (await fetch(`${BASE}/subtitles/${ID}.json`)).json()) as {
+  subtitles: { id: string; url: string }[];
+};
 const picks = list.subtitles.slice(0, 6);
 
 const timelines: { id: string; t: number[] }[] = [];
