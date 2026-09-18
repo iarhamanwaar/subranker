@@ -7,6 +7,7 @@
  */
 import { applyShift, type Shift } from './rewrite.js';
 import { stripAds } from './ads.js';
+import { decodeSubtitle } from './encoding.js';
 
 export interface ShiftRequest extends Shift {
   url: string;
@@ -109,7 +110,10 @@ export async function fetchShifted(req: ShiftRequest, timeoutMs = 8000): Promise
       }
 
       if (!res.ok) return null;
-      const text = await res.text();
+      // res.text() would assume UTF-8 and mangle legacy encodings, so the
+      // bytes are decoded explicitly. What we serve is always UTF-8.
+      const buf = Buffer.from(await res.arrayBuffer());
+      const { text } = decodeSubtitle(buf);
       // Banners are removed before shifting: they sit outside the real
       // timeline, so dropping them first keeps the cue numbering clean.
       const cleaned = stripAds(text).content;

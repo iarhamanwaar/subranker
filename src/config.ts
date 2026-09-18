@@ -10,10 +10,14 @@
 export interface Config {
   port: number;
   /**
-   * Upstream Stremio subtitle addon, without the trailing `/manifest.json`.
-   * Example shape: https://host/stremio/<uuid>/<config>
+   * Upstream Stremio subtitle addons, without the trailing `/manifest.json`.
+   *
+   * Several may be given, comma-separated. They are queried in parallel and
+   * merged, which is worth doing because providers expose different metadata:
+   * OpenSubtitles V3+ reports `moviehash` (an exact-file signal) while
+   * SubSense aggregates ten sources but reports no hash.
    */
-  upstreamBase: string;
+  upstreamBases: string[];
   /** Rewrite `lang` so each row is distinguishable on the client. */
   relabel: boolean;
   /** Remove clear mismatches instead of ranking them low. */
@@ -65,8 +69,11 @@ function int(value: string | undefined, fallback: number): number {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const upstreamBase = (env.UPSTREAM_BASE ?? '').replace(/\/+$/, '').replace(/\/manifest\.json$/, '');
-  if (!upstreamBase) {
+  const upstreamBases = (env.UPSTREAM_BASE ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/manifest\.json$/, '').replace(/\/+$/, ''))
+    .filter((s) => s.length > 0);
+  if (upstreamBases.length === 0) {
     throw new Error(
       'UPSTREAM_BASE is required. Set it to your subtitle addon base URL, ' +
         'without /manifest.json. See .env.example.',
@@ -75,7 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port: int(env.PORT, 7010),
-    upstreamBase,
+    upstreamBases,
     relabel: bool(env.RELABEL, true),
     dropMismatches: bool(env.DROP_MISMATCHES, true),
     verify: bool(env.VERIFY, true),

@@ -10,6 +10,7 @@ import { loadConfig, type Config } from './config.js';
 import { runPipeline } from './pipeline.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
+import { fetchUpstreams } from './upstream/fetch.js';
 import type { RawSubtitle, RequestExtras } from './types.js';
 
 /**
@@ -92,7 +93,7 @@ export function createApp(config: Config) {
     }
 
     if (pathname.endsWith('/manifest.json')) {
-      const upstream = await fetch(`${config.upstreamBase}/manifest.json`);
+      const upstream = await fetch(`${config.upstreamBases[0]}/manifest.json`);
       const manifest = (await upstream.json()) as Record<string, unknown>;
       return send(
         res,
@@ -131,10 +132,8 @@ export function createApp(config: Config) {
     }
 
     try {
-      const upstreamUrl = `${config.upstreamBase}${pathname}`;
-      const upstream = await fetch(upstreamUrl);
-      const payload = (await upstream.json()) as { subtitles?: RawSubtitle[] };
-      const subs = Array.isArray(payload.subtitles) ? payload.subtitles : [];
+      const merged = await fetchUpstreams(config.upstreamBases, pathname);
+      const subs = merged.subtitles;
 
       if (config.probeLabels) {
         // Diagnostic: return one row per candidate label format instead of
@@ -150,6 +149,8 @@ export function createApp(config: Config) {
           path: pathname,
           extras: parsed.extras,
           hasFilename: Boolean(parsed.extras.filename),
+          upstreamsOk: merged.ok.length,
+          upstreamsFailed: merged.failed,
           ...result.stats,
           target: undefined,
           targetGroup: result.stats.target.group ?? null,

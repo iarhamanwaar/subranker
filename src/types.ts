@@ -18,6 +18,8 @@ export interface RawSubtitle {
   source?: string;
   moviehash?: string | boolean;
   title?: string;
+  /** Which configured upstream produced this entry. */
+  upstream?: string;
   [key: string]: unknown;
 }
 
@@ -92,4 +94,8 @@ export interface Verification {
   agreement?: number;
   /** Promotional cues detected in the file. */
   adCues?: number;
+  /** Encoding the bytes were actually in. */
+  encoding?: string;
+  /** True when the text had to be repaired to be readable. */
+  encodingRepaired?: boolean;
 }

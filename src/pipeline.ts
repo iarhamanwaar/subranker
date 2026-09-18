@@ -191,13 +191,15 @@ export async function runPipeline(
       const shift = { offset: v.offset, rate: v.rate };
       const needsShift = isShiftSafeToApply(shift, v.agreement);
       const hasAds = (v.adCues ?? 0) > 0;
-      if ((!needsShift && !hasAds) || !isFetchableUrl(c.raw.url)) return c;
+      const badEncoding = v.encodingRepaired === true;
+      if ((!needsShift && !hasAds && !badEncoding) || !isFetchableUrl(c.raw.url)) return c;
 
       // A file with banners is worth proxying even when its timing is fine.
       const applied = needsShift ? shift : { offset: 0, rate: 1 };
       const reasons = [...c.reasons];
       if (needsShift) reasons.push('timing corrected');
       if (hasAds) reasons.push('ads removed');
+      if (badEncoding) reasons.push('encoding fixed');
       return {
         ...c,
         raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...applied, url: c.raw.url })}` },
