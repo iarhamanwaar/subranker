@@ -60,7 +60,8 @@ for (const [id, filename] of TITLES) {
 
   for (const { r } of alive) {
     live++;
-    if (r.timeline === reference) { inSync++; continue; }
+    // The anchor itself is trivially in sync with itself.
+    if (r.timeline === reference) { alreadyInSync++; continue; }
     const a = align(r.timeline, reference);
     // A file needing no correction is not a rejection. The first version of
     // this probe counted those as 'out of bounds' because isShiftSafeToApply
