@@ -15,7 +15,7 @@ import { align, isTrustworthy } from '../src/verify/cues.js';
 import { buildCandidates, consensusTimeline } from '../src/pipeline.js';
 import { scoreAll, rank } from '../src/score/score.js';
 import { parseRelease } from '../src/parse/release.js';
-import { isShiftSafeToApply } from '../src/shift/rewrite.js';
+import { isShiftSafeToApply, isShiftWorthApplying, MAX_APPLY_OFFSET_SECONDS, MIN_APPLY_AGREEMENT } from '../src/shift/rewrite.js';
 import type { RawSubtitle } from '../src/types.js';
 
 const BASES = (process.env.UPSTREAM_BASE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -35,7 +35,7 @@ const TITLES: Array<[string, string]> = [
   ['series/tt0877057:1:1', '[HorribleSubs] Death Note - 01 [1080p].mkv'],
 ];
 
-let live = 0, noConsensus = 0, untrusted = 0, outOfBounds = 0, applied = 0, inSync = 0;
+let live = 0, noConsensus = 0, untrusted = 0, tooFar = 0, applied = 0, alreadyInSync = 0;
 const rejected: Array<{ title: string; offset: number; rate: number; agreement: number }> = [];
 
 for (const [id, filename] of TITLES) {
@@ -62,28 +62,36 @@ for (const [id, filename] of TITLES) {
     live++;
     if (r.timeline === reference) { inSync++; continue; }
     const a = align(r.timeline, reference);
+    // A file needing no correction is not a rejection. The first version of
+    // this probe counted those as 'out of bounds' because isShiftSafeToApply
+    // is false for them too, which inflated the result to 72% and would have
+    // justified building a feature for files that are already fine.
+    if (!isShiftWorthApplying({ offset: a.offset, rate: a.rate })) {
+      alreadyInSync++;
+      continue;
+    }
     if (!isTrustworthy(a)) {
       untrusted++;
       rejected.push({ title: filename.slice(0, 28), offset: a.offset, rate: a.rate, agreement: a.agreement });
       continue;
     }
     if (!isShiftSafeToApply({ offset: a.offset, rate: a.rate }, a.agreement)) {
-      outOfBounds++;
+      tooFar++;
       rejected.push({ title: filename.slice(0, 28), offset: a.offset, rate: a.rate, agreement: a.agreement });
       continue;
     }
     applied++;
-    if (Math.abs(a.offset) < 0.5 && a.rate === 1) inSync++;
   }
 }
 
-console.log(`live candidates checked   ${live}`);
-console.log(`  no consensus to anchor  ${noConsensus}`);
-console.log(`  aligned + applicable    ${applied}`);
-console.log(`  rejected: untrustworthy ${untrusted}`);
-console.log(`  rejected: out of bounds ${outOfBounds}`);
-const recoverable = untrusted + outOfBounds;
-console.log(`\npiecewise would target    ${recoverable}/${live} (${live ? ((recoverable/live)*100).toFixed(1) : '0'}%) of live candidates`);
+console.log(`live candidates checked      ${live}`);
+console.log(`  already in sync (no shift)  ${alreadyInSync}`);
+console.log(`  no consensus to anchor      ${noConsensus}`);
+console.log(`  shift measured + applied    ${applied}`);
+console.log(`  rejected: low agreement     ${untrusted}   (< ${MIN_APPLY_AGREEMENT} or < 0.35 trust)`);
+console.log(`  rejected: offset too large  ${tooFar}   (> ${MAX_APPLY_OFFSET_SECONDS}s)`);
+const recoverable = untrusted + tooFar;
+console.log(`\npiecewise would target       ${recoverable}/${live} (${live ? ((recoverable/live)*100).toFixed(1) : '0'}%) of live candidates`);
 if (rejected.length) {
   console.log('\nsample rejects (offset / rate / agreement):');
   for (const r of rejected.slice(0, 14)) {
