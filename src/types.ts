@@ -104,4 +104,6 @@ export interface Verification {
   allCaps?: boolean;
   /** Cues containing repairable OCR damage. */
   ocrCues?: number;
+  /** Pairs of cues that share screen time. */
+  overlapCues?: number;
 }

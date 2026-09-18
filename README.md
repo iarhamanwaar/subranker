@@ -147,6 +147,31 @@ ASS/SSA files are left untouched throughout — their cues carry typesetting tha
 line-level rewrites destroy, which is the standing complaint against Bazarr's
 own HI removal ([bazarr#2175](https://github.com/morpheus65535/bazarr/issues/2175)).
 
+### Overlapping cues
+
+When two cues are on screen at once — a sign and a line of dialogue, or two
+characters speaking together — a player that draws both in the same place
+renders them on top of each other and neither can be read. The usual cause is
+conversion: in ASS the sign carries a `\pos` tag putting it at the top of the
+frame, and converting to SRT throws that away.
+
+The timeline is split at every boundary and the text of whatever is active in
+each span is combined, so nothing is discarded and both lines appear for
+exactly as long as they were meant to. Simultaneous *speech* additionally takes
+the conventional one-dash-per-speaker form:
+
+```
+- Get back!
+- I can't!
+```
+
+which is applied only when every line reads as dialogue, so a sign stacked
+above speech is left as plain text.
+
+Measured on Demon Slayer: one provider's files overlapped on every episode
+checked (1, 4, 2, 7 and 3 occurrences across S01E01/02/06/07/12) while every
+other source was clean — the fault is in the file, not the player.
+
 ### Forced tracks
 
 A forced track covers only signs and foreign dialogue, and looks broken if
@@ -197,6 +222,7 @@ custom addon inside an aggregator.
 | `REMOVE_HI` | `false` | Strip hearing-impaired annotations and speaker labels |
 | `FIX_UPPERCASE` | `true` | Convert all-capitals files to sentence case |
 | `FIX_OCR` | `true` | Repair `l`/`I` and `rn`/`m` confusion |
+| `FIX_OVERLAPS` | `true` | Merge cues that share screen time |
 | `DEMOTE_FORCED` | `true` | Rank signs-only tracks below full subtitles |
 | `RELABEL` | `true` | Rewrite `lang` as well as `label`. See the note below |
 | `CACHE_TTL` | `3600` | Seconds to cache a computed response |

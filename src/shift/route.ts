@@ -9,6 +9,7 @@ import { applyShift, type Shift } from './rewrite.js';
 import { stripAds } from './ads.js';
 import { decodeSubtitle } from './encoding.js';
 import { cleanupCues } from './cleanup.js';
+import { fixOverlaps } from './overlap.js';
 
 export interface ShiftRequest extends Shift {
   url: string;
@@ -127,6 +128,9 @@ export async function fetchShifted(req: ShiftRequest, timeoutMs = 8000): Promise
         fixUppercase: flags.includes('u'),
         fixOcr: flags.includes('o'),
       }).content;
+      // Overlaps are merged last: the cleanups above can delete a cue
+      // entirely, which may remove the collision without any merging.
+      if (flags.includes('v')) cleaned = fixOverlaps(cleaned).content;
       return applyShift(cleaned, { offset: req.offset, rate: req.rate });
     }
     return null;

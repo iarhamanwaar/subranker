@@ -215,6 +215,7 @@ export async function runPipeline(
       if (config.removeHearingImpaired && (v.hiCues ?? 0) > 0) flags += 'h';
       if (config.fixUppercase && v.allCaps === true) flags += 'u';
       if (config.fixOcr && (v.ocrCues ?? 0) > 0) flags += 'o';
+      if (config.fixOverlaps && (v.overlapCues ?? 0) > 0) flags += 'v';
 
       const needsCleanup = flags.length > 0;
       if ((!needsShift && !hasAds && !badEncoding && !needsCleanup) || !isFetchableUrl(c.raw.url)) {
@@ -230,6 +231,7 @@ export async function runPipeline(
       if (flags.includes('h')) reasons.push('HI tags removed');
       if (flags.includes('u')) reasons.push('caps fixed');
       if (flags.includes('o')) reasons.push('OCR fixed');
+      if (flags.includes('v')) reasons.push('overlaps merged');
       return {
         ...c,
         raw: { ...c.raw, url: `${config.publicUrl}${buildShiftPath({ ...applied, url: c.raw.url, flags })}` },

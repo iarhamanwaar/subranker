@@ -60,6 +60,13 @@ export interface Config {
   /** Repair characters that optical recognition routinely confuses. */
   fixOcr: boolean;
   /**
+   * Merge cues that share screen time.
+   *
+   * A player that draws both in the same place renders them on top of each
+   * other and neither can be read.
+   */
+  fixOverlaps: boolean;
+  /**
    * Demote forced tracks (signs and foreign dialogue only).
    *
    * They are not wrong, they are simply not what you want when you asked for
@@ -112,6 +119,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     removeHearingImpaired: bool(env.REMOVE_HI, false),
     fixUppercase: bool(env.FIX_UPPERCASE, true),
     fixOcr: bool(env.FIX_OCR, true),
+    fixOverlaps: bool(env.FIX_OVERLAPS, true),
     demoteForced: bool(env.DEMOTE_FORCED, true),
     addonName: env.ADDON_NAME ?? 'SubRanker',
     probeLabels: bool(env.PROBE_LABELS, false),

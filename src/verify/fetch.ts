@@ -13,6 +13,7 @@ import { align, parseTimeline, type Timeline } from './cues.js';
 import { stripAds } from '../shift/ads.js';
 import { decodeSubtitle } from '../shift/encoding.js';
 import { cleanupCues } from '../shift/cleanup.js';
+import { fixOverlaps } from '../shift/overlap.js';
 
 /** Statuses that indicate the server refused us specifically, not a dead link. */
 const IP_BLOCK_STATUSES = new Set([401, 403, 429]);
@@ -109,7 +110,12 @@ export async function fetchAndInspect(
             fixUppercase: true,
             fixOcr: true,
           });
-          return { hiCues: c.hiCuesChanged, allCaps: c.uppercaseFixed, ocrCues: c.ocrFixed };
+          return {
+            hiCues: c.hiCuesChanged,
+            allCaps: c.uppercaseFixed,
+            ocrCues: c.ocrFixed,
+            overlapCues: fixOverlaps(text).merged,
+          };
         })(),
       },
       timeline,
