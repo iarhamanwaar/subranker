@@ -116,12 +116,32 @@ export interface AlignOptions {
   rateMargin?: number;
 }
 
+/**
+ * Collapse onsets that start within `gap` seconds of the previous kept one.
+ *
+ * Typeset releases layer one sign as many cues with the same start time:
+ * Kaleido-Flax's Demon Slayer S01E18 has 2742 cues where every other file has
+ * about 268. Each layer adds to the same histogram bin, so the pair count
+ * exceeded the cue count, agreement clamped to 1.00 at a meaningless 151.5s
+ * offset, and the file was labelled "in sync" and voted into the consensus.
+ * Alignment is about when lines start, so a stack of identical onsets is one.
+ */
+export function distinctOnsets(times: Timeline, gap = 0.25): Timeline {
+  const out: number[] = [];
+  for (const t of times) {
+    if (out.length === 0 || t - out[out.length - 1]! >= gap) out.push(t);
+  }
+  return out;
+}
+
 export function align(
-  candidate: Timeline,
-  reference: Timeline,
+  rawCandidate: Timeline,
+  rawReference: Timeline,
   options: AlignOptions = {},
 ): Alignment {
   const empty: Alignment = { offset: 0, rate: 1, agreement: 0 };
+  const candidate = distinctOnsets(rawCandidate);
+  const reference = distinctOnsets(rawReference);
   if (candidate.length < 5 || reference.length < 5) return empty;
 
   const BIN = 0.25; // seconds

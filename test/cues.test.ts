@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { align, isTrustworthy, parseTimeline } from '../src/verify/cues.js';
+import { align, isTrustworthy, parseTimeline, distinctOnsets } from '../src/verify/cues.js';
 
 const VTT = `WEBVTT
 
@@ -76,5 +76,28 @@ describe('align', () => {
     const a = align([1, 2], reference);
     expect(a.agreement).toBe(0);
     expect(a.rate).toBe(1);
+  });
+});
+
+describe('align with layered typesetting', () => {
+  it('does not let stacked identical onsets saturate agreement at a false offset', () => {
+    // Irregular gaps, as in real dialogue; a periodic grid would make a shift
+    // of one gap look as good as the truth.
+    let t = 10;
+    const reference = Array.from({ length: 200 }, (_, i) => (t += 2 + ((i * 37) % 11) * 0.9));
+    // 85% of the dialogue in sync (real files differ a little), plus 20 signs
+    // that happen to sit 150s after a line, each stacked 12 layers deep. The
+    // stack alone used to outvote the whole in-sync dialogue track.
+    const layered = [
+      ...reference.filter((_, i) => i % 7 !== 0),
+      ...reference.slice(0, 20).flatMap((t) => Array.from({ length: 12 }, () => t + 150)),
+    ].sort((a, b) => a - b);
+    const a = align(layered, reference);
+    expect(a.offset).toBe(0);
+    expect(a.agreement).toBeGreaterThan(0.8);
+  });
+
+  it('collapses onsets closer than the gap', () => {
+    expect(distinctOnsets([1, 1, 1.1, 1.5, 3])).toEqual([1, 1.5, 3]);
   });
 });
