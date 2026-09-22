@@ -207,11 +207,18 @@ export async function parseRelease(name: string): Promise<ParsedRelease> {
   const [anime, general] = await Promise.all([parseAnime(trimmed), parseGeneral(trimmed)]);
   const [winner, other] = anime.confidence >= general.confidence ? [anime, general] : [general, anime];
 
+  // An explicit SxxEyy marker overrides both parsers. The filename parser can
+  // misread it: `[Xspitfire911] Kimetsu No Yaiba S01E18 BDRIP 1080p X265
+  // 10bit VOSTFR.mkv` comes back as episode 10, taken from "10bit". A wrong
+  // episode is the worst possible error here, because every correct
+  // candidate is then dropped as a mismatch (17 in, 1 out, on the TV).
+  const se = /(?:^|[^a-z0-9])S(\d{1,2})[\s._-]?E(\d{1,4})(?![0-9])/i.exec(trimmed);
+
   return {
     ...winner,
     title: winner.title ?? other.title,
-    season: winner.season ?? other.season,
-    episode: winner.episode ?? other.episode,
+    season: se ? Number(se[1]) : winner.season ?? other.season,
+    episode: se ? Number(se[2]) : winner.episode ?? other.episode,
     year: winner.year ?? other.year,
     resolution: winner.resolution ?? other.resolution,
     source: winner.source ?? other.source,

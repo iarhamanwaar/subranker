@@ -14,6 +14,14 @@ describe('parseRelease', () => {
     expect(r.dub).toBe(false);
   });
 
+  it('trusts an explicit SxxEyy over the parser when "10bit" is present', async () => {
+    // Real filename from the TV; the filename parser returns episode 10.
+    const r = await parseRelease('[Xspitfire911] Kimetsu No Yaiba S01E18 BDRIP 1080p X265 10bit VOSTFR.mkv');
+    expect(r.season).toBe(1);
+    expect(r.episode).toBe(18);
+    expect(r.group).toBe('xspitfire911');
+  });
+
   it('parses a scene-style anime release with season and episode', async () => {
     const r = await parseRelease('Demon.Slayer_.Kimetsu.no.Yaiba.S01E01.WEBRip.Netflix');
     expect(r.season).toBe(1);
