@@ -22,7 +22,7 @@ import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { runPipeline } from './pipeline.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
-import { fetchUpstreams } from './upstream/fetch.js';
+import { fetchForRequest } from './upstream/fetch.js';
 import type { RequestExtras } from './types.js';
 
 /**
@@ -175,7 +175,7 @@ export function createApp(base: Config) {
     if (hit && Date.now() - hit.at < config.cacheTtl * 1000) return send(res, 200, hit.body);
 
     try {
-      const merged = await fetchUpstreams(config.upstreamBases, route.rest);
+      const merged = await fetchForRequest(config.upstreamBases, route.rest);
       const subs = merged.subtitles;
 
       if (config.probeLabels) {
@@ -196,6 +196,7 @@ export function createApp(base: Config) {
       console.log(
         JSON.stringify({
           path: route.rest,
+          resolvedPath: merged.resolvedPath,
           rank: route.rank,
           urlConfig: route.config !== null,
           hasFilename: Boolean(parsed.extras.filename),

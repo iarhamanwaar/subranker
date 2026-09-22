@@ -9,6 +9,7 @@
  * and the certainty of the other.
  */
 import type { RawSubtitle } from '../types.js';
+import { imdbPathFor } from './kitsu.js';
 
 export interface UpstreamResult {
   subtitles: RawSubtitle[];
@@ -91,4 +92,33 @@ export async function fetchUpstreams(
   }
 
   return { subtitles, ok, failed };
+}
+
+/**
+ * Fetch for a request, querying the IMDb form too when the id is Kitsu.
+ *
+ * The original path is still sent: some upstreams (OpenSubtitles V3+) do
+ * resolve Kitsu ids themselves, and a file found only that way is still worth
+ * ranking. Results are merged and deduplicated on URL as usual.
+ */
+export async function fetchForRequest(
+  bases: string[],
+  path: string,
+  timeoutMs = 20000,
+): Promise<UpstreamResult & { resolvedPath: string | null }> {
+  const resolvedPath = await imdbPathFor(path);
+  if (!resolvedPath) return { ...(await fetchUpstreams(bases, path, timeoutMs)), resolvedPath };
+
+  const [a, b] = await Promise.all([
+    fetchUpstreams(bases, path, timeoutMs),
+    fetchUpstreams(bases, resolvedPath, timeoutMs),
+  ]);
+  const seen = new Set<string>();
+  const subtitles = [...b.subtitles, ...a.subtitles].filter((s) =>
+    seen.has(s.url) ? false : (seen.add(s.url), true),
+  );
+  // An upstream counts as ok if either query reached it.
+  const ok = [...new Set([...a.ok, ...b.ok])];
+  const failed = b.failed.filter((f) => !ok.includes(f.base));
+  return { subtitles, ok, failed, resolvedPath };
 }
