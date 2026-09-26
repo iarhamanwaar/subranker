@@ -74,7 +74,9 @@ export function titleLabel(opts: { word: string; numOf: (g: number) => string })
     return {
       title: `${optTitle}${short}${s} · ${e.name}`,
       lead: `${opt}${opts.word} ${n} · #${e.order} · ${it.title ?? short}${s}, episode ${e.episode} (${e.index + 1} of ${e.count}).${note}`,
-      thumb: { mode: 'tag', num: n, sub: `${head} · Series${s}`, main: short, pos: `E${e.episode}/${e.seasonCount}` },
+      // A hand-picked set (the essential Clone Wars arcs) counts within the
+      // set; a whole season counts episodes of the season.
+      thumb: { mode: 'tag', num: n, sub: `${head} · Series${s}`, main: short, pos: 'ids' in it && it.ids ? `${e.index + 1}/${e.count}` : `E${e.episode}/${e.seasonCount}` },
     };
   };
 }

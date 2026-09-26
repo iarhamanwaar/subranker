@@ -81,6 +81,16 @@ describe('expand', () => {
     expect(v[1]!.label).toMatchObject({ sub: 'Phase 1 · Series S1', pos: 'E1/2' });
   });
 
+  it('counts a hand-picked set within the set, not within its season', async () => {
+    const western: Franchise = {
+      ...anime, style: 'western',
+      plan: [[1, [{ series: 'tt1', ids: ['tt1:1:2', 'tt1:2:1'], short: 'Show' }]]],
+      label: titleLabel({ word: 'Era', numOf: String }),
+    };
+    const v = await expand(western, get, TODAY);
+    expect(v.map((x) => (x.label as { pos: string }).pos)).toEqual(['1/2', '2/2']);
+  });
+
   it('keeps descriptions to what the TV can show', async () => {
     const long = { ...SOURCES['movie/tt9']!, description: 'word '.repeat(200) };
     const v = await expand({ ...anime, plan: [[1, [{ movie: 'tt9' }]]] }, async () => long, TODAY);

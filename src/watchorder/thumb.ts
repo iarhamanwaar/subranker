@@ -81,38 +81,44 @@ function labelNode(style: ThumbStyle, lab: ThumbLabel, color: string, pattern: P
     strip(pattern));
 }
 
-async function dataUrl(image: Buffer, w: number, hgt: number): Promise<string> {
-  const jpg = await sharp(image).resize(w, hgt, { fit: 'cover' }).jpeg({ quality: 90 }).toBuffer();
-  return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+/**
+ * Draw the overlay alone (label on a transparent canvas) and let sharp lay it
+ * over the photo. Handing resvg the photo as an embedded image made it hold
+ * ~500MB after a few dozen renders; the overlay alone stays small, and sharp
+ * is the right tool for the photo anyway.
+ */
+async function overlay(tree: Node, w: number, hgt: number): Promise<Buffer> {
+  const svg = await satori(tree as never, { width: w, height: hgt, fonts: FONTS });
+  // satori has already turned every glyph into a path, so resvg needs no fonts.
+  // Left at its default it loads every system font on each render: hundreds
+  // of MB and most of the CPU time.
+  return Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: w }, font: { loadSystemFonts: false } }).render().asPng());
 }
 
-const img = (src: string, w: number, hgt: number): Node => ({ type: 'img', props: { src, width: w, height: hgt, style: { position: 'absolute', left: 0, top: 0, width: w, height: hgt } } });
-
-async function toJpeg(tree: Node, w: number, hgt: number, quality: number): Promise<Buffer> {
-  const svg = await satori(tree as never, { width: w, height: hgt, fonts: FONTS });
-  const png = new Resvg(svg, { fitTo: { mode: 'width', value: w } }).render().asPng();
-  return sharp(png).jpeg({ quality, mozjpeg: true, progressive: true }).toBuffer();
+async function compose(image: Buffer | undefined, over: Buffer, w: number, hgt: number, quality: number): Promise<Buffer> {
+  const base = image
+    ? sharp(image).resize(w, hgt, { fit: 'cover' })
+    : sharp({ create: { width: w, height: hgt, channels: 3, background: '#262338' } });
+  return base.composite([{ input: over }]).jpeg({ quality, mozjpeg: true, progressive: true }).toBuffer();
 }
 
 export async function renderThumb(o: { image?: Buffer; style: ThumbStyle; label: ThumbLabel; color: string; pattern: Pattern }): Promise<Buffer> {
-  const tree = h('div', { width: W, height: H, position: 'relative', background: '#262338' },
-    o.image ? img(await dataUrl(o.image, W, H), W, H) : null,
+  const tree = h('div', { width: W, height: H, position: 'relative' },
     labelNode(o.style, o.label, o.color, o.pattern),
     o.label.mode === 'tag' && o.label.pos
       ? h('div', { position: 'absolute', left: 3 * u, bottom: 3.8 * u, fontFamily: 'Jakarta', fontWeight: 700, fontSize: 4.6 * u, lineHeight: 1, color: '#fff', background: 'rgba(10,8,20,0.72)', padding: `${1.7 * u}px ${2.9 * u}px`, borderRadius: 2 * u, letterSpacing: 0.14 * u }, o.label.pos)
       : null);
-  return toJpeg(tree, W, H, 78);
+  return compose(o.image, await overlay(tree, W, H), W, H, 78);
 }
 
 /** Playlist poster: WATCH ORDER band whose bottom edge runs every season's pattern in order. */
 export async function renderPoster(o: { image: Buffer; patterns: Pattern[] }): Promise<Buffer> {
   const PW = 400, PH = 600, v = PW / 100;
-  const tree = h('div', { width: PW, height: PH, position: 'relative', background: '#262338' },
-    img(await dataUrl(o.image, PW, PH), PW, PH),
+  const tree = h('div', { width: PW, height: PH, position: 'relative' },
     h('div', { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'column', backgroundImage: 'linear-gradient(0deg, rgba(10,8,20,0.97) 72%, rgba(10,8,20,0))', paddingTop: 12 * v },
       h('span', { fontFamily: 'Jakarta', fontWeight: 800, fontSize: 7.5 * v, letterSpacing: 1.05 * v, color: '#fff', padding: `0 ${6 * v}px ${4 * v}px` }, 'WATCH ORDER'),
       h('div', { height: 4 * v }, ...o.patterns.map((p) => h('div', { flexGrow: 1, height: 4 * v, ...p })))));
-  return toJpeg(tree, PW, PH, 84);
+  return compose(o.image, await overlay(tree, PW, PH), PW, PH, 84);
 }
 
 /** Text logo for franchises without one. PNG with transparency: the TV draws it over the backdrop, and SVG logos crash Android. */
@@ -124,5 +130,5 @@ export async function renderLogo(o: { accent: string; rest: string; color?: stri
     h('span', { color: o.color ?? '#e23636', marginRight: 36 }, o.accent),
     h('span', { color: '#fff' }, o.rest));
   const svg = await satori(tree as never, { width: LW, height: LH, fonts: FONTS });
-  return sharp(new Resvg(svg).render().asPng()).trim().png({ compressionLevel: 9 }).toBuffer();
+  return sharp(new Resvg(svg, { font: { loadSystemFonts: false } }).render().asPng()).trim().png({ compressionLevel: 9 }).toBuffer();
 }

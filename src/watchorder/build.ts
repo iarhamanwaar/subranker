@@ -21,7 +21,7 @@ import { renderLogo, renderPoster, renderThumb } from './thumb.js';
 import type { Franchise, PlaylistVideo } from './types.js';
 
 /** Bump when the rendering changes, so every image is redrawn once. */
-const RENDER_VERSION = 2;
+const RENDER_VERSION = 4;
 
 export interface BuiltIndex {
   builtAt: string;
@@ -37,6 +37,9 @@ async function fetchImage(url: string | undefined): Promise<Buffer | undefined> 
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
       if (res.ok) return Buffer.from(await res.arrayBuffer());
+      // Drain the body: an unread response keeps its connection open, and a
+      // long build would pile up hundreds of them.
+      await res.body?.cancel();
       if (res.status === 404) return undefined;
     } catch {
       // retried below
@@ -55,6 +58,7 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
   const used = new Set<string>();
   const imgUrl = (name: string) => `${opts.publicUrl}/wo/img/${name}`;
   let rendered = 0;
+  let missing = 0;
 
   // Render once per distinct input; later runs find the file and skip it.
   async function image(key: unknown, ext: 'jpg' | 'png', render: () => Promise<Buffer>): Promise<string> {
@@ -84,9 +88,18 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
     const logo = typeof f.logo === 'string' ? f.logo : imgUrl(await image(['logo', f.logo], 'png', () => renderLogo(f.logo as Exclude<Franchise['logo'], string>)));
 
     const out = [];
+    let backdrop: Buffer | undefined;
     for (const v of videos) {
-      const thumb = await image(['thumb', f.style, v.source, v.label, v.groupColor, v.groupPattern], 'jpg', async () =>
-        renderThumb({ image: await fetchImage(v.source), style: f.style, label: v.label, color: v.groupColor, pattern: v.groupPattern }));
+      const thumb = await image(['thumb', f.style, v.source, v.label, v.groupColor, v.groupPattern], 'jpg', async () => {
+        // Many older anime episodes have no still on the image host; the
+        // show's own backdrop beats a blank card.
+        let src = await fetchImage(v.source);
+        if (!src) {
+          missing++;
+          src = backdrop ??= await fetchImage(f.background);
+        }
+        return renderThumb({ image: src, style: f.style, label: v.label, color: v.groupColor, pattern: v.groupPattern });
+      });
       out.push(videoJson(v, imgUrl(thumb)));
     }
 
@@ -121,7 +134,7 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
       if (!used.has(name)) { unlinkSync(join(imgDir, name)); pruned++; }
     }
   }
-  log(`done: ${franchises.length} playlists, ${rendered} images rendered, ${pruned} pruned`);
+  log(`done: ${franchises.length} playlists, ${rendered} images rendered (${missing} without an episode still), ${pruned} pruned`);
   return index;
 }
 
