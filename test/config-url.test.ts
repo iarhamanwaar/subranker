@@ -28,6 +28,10 @@ const BASE: Config = {
   demoteForced: true,
   addonName: 'SubRanker',
   probeLabels: false,
+  watchOrder: false,
+  watchOrderDir: './data/watch-order',
+  watchOrderHour: 4,
+  watchOrderBuilder: 'internal',
 };
 
 describe('encode / decode', () => {

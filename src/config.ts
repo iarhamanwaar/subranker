@@ -90,6 +90,22 @@ export interface Config {
    * dictionary and draws an empty row for anything it does not recognise.
    */
   probeLabels: boolean;
+  /**
+   * Serve the Watch Order playlists: a Home row of franchise playlists (MCU,
+   * X-Men, Demon Slayer…) in watch order, rebuilt nightly by a background
+   * process. Off by default; a user can turn it on from the configure page.
+   */
+  watchOrder: boolean;
+  /** Where the builder keeps its output, image files and Cinemeta cache. */
+  watchOrderDir: string;
+  /** Local hour (0-23) of the nightly rebuild. */
+  watchOrderHour: number;
+  /**
+   * Who runs the nightly build. `internal`: this server spawns it (right for
+   * a container). `external`: something else does, such as a systemd timer
+   * with its own CPU and memory limits, and this server only serves results.
+   */
+  watchOrderBuilder: 'internal' | 'external';
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -100,6 +116,11 @@ function bool(value: string | undefined, fallback: boolean): boolean {
 function int(value: string | undefined, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+function hour(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return value !== undefined && Number.isInteger(n) && n >= 0 && n <= 23 ? n : fallback;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -134,5 +155,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     demoteForced: bool(env.DEMOTE_FORCED, true),
     addonName: env.ADDON_NAME ?? 'SubRanker',
     probeLabels: bool(env.PROBE_LABELS, false),
+    watchOrder: bool(env.WATCH_ORDER, false),
+    watchOrderDir: env.WATCH_ORDER_DIR ?? './data/watch-order',
+    watchOrderHour: hour(env.WATCH_ORDER_HOUR, 4),
+    watchOrderBuilder: env.WATCH_ORDER_BUILDER === 'external' ? 'external' : 'internal',
   };
 }

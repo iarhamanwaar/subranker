@@ -26,6 +26,7 @@ export interface UrlConfig {
   dropMismatches?: boolean;
   verify?: boolean;
   relabel?: boolean;
+  watchOrder?: boolean;
 }
 
 export function encodeUrlConfig(config: UrlConfig): string {
@@ -73,6 +74,7 @@ export function decodeUrlConfig(segment: string): UrlConfig | null {
       dropMismatches: bool(raw.dropMismatches),
       verify: bool(raw.verify),
       relabel: bool(raw.relabel),
+      watchOrder: bool(raw.watchOrder),
     };
   } catch {
     return null;
@@ -100,6 +102,7 @@ export function applyUrlConfig(base: Config, url: UrlConfig): Config {
     dropMismatches: pick(url.dropMismatches, base.dropMismatches),
     verify: pick(url.verify, base.verify),
     relabel: pick(url.relabel, base.relabel),
+    watchOrder: pick(url.watchOrder, base.watchOrder),
   };
 }
 

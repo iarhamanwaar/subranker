@@ -34,6 +34,8 @@ export interface ManifestOptions {
   rank?: number | null;
   /** Public origin, used to point at the icon this server serves itself. */
   publicUrl?: string;
+  /** Add the Watch Order row and the playlist metadata. */
+  watchOrder?: boolean;
 }
 
 /**
@@ -51,8 +53,11 @@ export function rankName(base: string, rank: number): string {
   return `${base} ${rank}`;
 }
 
-export function buildManifest({ name, rank, publicUrl }: ManifestOptions): Record<string, unknown> {
+export function buildManifest({ name, rank, publicUrl, watchOrder }: ManifestOptions): Record<string, unknown> {
   const pinned = typeof rank === 'number';
+  // Never on a rank-pinned instance: someone installing several of those
+  // would get the same Home row once per instance.
+  const playlists = !!watchOrder && !pinned;
   return {
     id: pinned ? `com.subranker.r${rank}` : 'com.subranker',
     version: VERSION,
@@ -64,10 +69,18 @@ export function buildManifest({ name, rank, publicUrl }: ManifestOptions): Recor
     // cannot rot: the previous URL pointed at a file that did not exist and
     // Stremio showed the addon with no icon.
     ...(publicUrl ? { logo: `${publicUrl}/logo.svg` } : {}),
-    resources: ['subtitles'],
-    types: ['movie', 'series'],
-    idPrefixes: ['tt', 'kitsu'],
-    catalogs: [],
+    ...(playlists
+      ? {
+          // Per-resource prefixes: subtitles answer for real titles, meta only
+          // for this addon's own playlist ids.
+          resources: [
+            { name: 'subtitles', types: ['movie', 'series'], idPrefixes: ['tt', 'kitsu'] },
+            { name: 'meta', types: ['series'], idPrefixes: ['wo-'] },
+          ],
+          types: ['movie', 'series'],
+          catalogs: [{ type: 'series', id: 'watchorder', name: 'Watch Order' }],
+        }
+      : { resources: ['subtitles'], types: ['movie', 'series'], idPrefixes: ['tt', 'kitsu'], catalogs: [] }),
     behaviorHints: { configurable: true, configurationRequired: false },
   };
 }

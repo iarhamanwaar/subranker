@@ -29,6 +29,11 @@ RUN addgroup -S app && adduser -S -G app app
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/package.json ./package.json
+# Fonts for the Watch Order thumbnails (SIL Open Font License, see assets/fonts).
+COPY --chown=app:app assets ./assets
+# Watch Order output (built playlists, thumbnails). Mount a volume here to keep
+# thumbnails across restarts instead of re-rendering them.
+RUN mkdir -p /app/data && chown app:app /app/data
 
 USER app
 EXPOSE 7010

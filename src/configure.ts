@@ -85,8 +85,13 @@ export function configurePage(base: Config): string {
     fixOcr: base.fixOcr,
     fixOverlaps: base.fixOverlaps,
     demoteForced: base.demoteForced,
+    watchOrder: base.watchOrder,
   };
   const on = (v: boolean) => (v ? ' checked' : '');
+  // Offered only where this server builds the playlists.
+  const watchOrderOpt = base.watchOrder
+    ? `<div class="opt"><input type="checkbox" id="watchOrder"${on(d.watchOrder)}><div><div class="t">Watch Order row</div><div class="d">Adds a Home row of franchise playlists in watch order: MCU, X-Men, Star Wars, Demon Slayer, Jujutsu Kaisen, Attack on Titan and One Piece (filler removed). New episodes join as they air.</div></div></div>`
+    : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -269,6 +274,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
       <h2>What you see</h2>
       <p class="note">How much of the ranked list reaches your player.</p>
       <div class="opt"><input type="checkbox" id="demoteForced"${on(d.demoteForced)}><div><div class="t">Push signs-only tracks down</div><div class="d">Tracks that translate only signs look broken if picked by mistake.</div></div></div>
+      ${watchOrderOpt}
       <div style="margin-top:14px">
         <label class="fld" for="maxResults">Show at most</label>
         <input type="number" id="maxResults" min="0" max="50" value="${d.maxResults}">
@@ -415,6 +421,8 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding-top:18px;color:v
       fixUppercase: document.getElementById('fixUppercase').checked,
       demoteForced: document.getElementById('demoteForced').checked
     };
+    var wo = document.getElementById('watchOrder');
+    if (wo) cfg.watchOrder = wo.checked;
     // textContent, not innerHTML: this string is built from user input.
     urlEl.textContent = location.origin + '/c/' + b64url(JSON.stringify(cfg)) + '/manifest.json';
     out.style.display = 'block';

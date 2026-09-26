@@ -24,6 +24,8 @@ import { runPipeline } from './pipeline.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
 import type { RequestExtras } from './types.js';
+import { WatchOrderStore } from './watchorder/store.js';
+import { startScheduler } from './watchorder/scheduler.js';
 
 /**
  * Parse Stremio's extras segment.
@@ -103,7 +105,12 @@ function cacheFingerprint(c: Config): string {
   ].join('|');
 }
 
-export function createApp(base: Config) {
+/**
+ * `watchOrder` is present only when the server runs the playlist builder
+ * (WATCH_ORDER=on). A user's URL config can switch the row off for their
+ * install, but cannot switch on what this server does not build.
+ */
+export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } = {}) {
   const cache = new Map<string, CacheEntry>();
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
@@ -133,6 +140,8 @@ export function createApp(base: Config) {
       return;
     }
 
+    if (deps.watchOrder?.handleImage(req, res, pathname)) return;
+
     // Checked before route parsing: a shift path carries base64 segments of
     // its own, which must not be mistaken for a config segment.
     const shift = parseShiftPath(pathname);
@@ -150,6 +159,9 @@ export function createApp(base: Config) {
 
     const route = parseRoute(pathname);
     const config = route.config ? applyUrlConfig(base, route.config) : base;
+    const watchOrder = config.watchOrder && route.rank === null ? deps.watchOrder : undefined;
+
+    if (watchOrder?.handle(req, res, route.rest)) return;
 
     if (route.rest === '/' || route.rest === '/configure' || route.rest === '/configure/') {
       return send(res, 200, configurePage(base), 'text/html');
@@ -160,7 +172,7 @@ export function createApp(base: Config) {
         res,
         200,
         JSON.stringify(
-          buildManifest({ name: config.addonName, rank: route.rank, publicUrl: config.publicUrl }),
+          buildManifest({ name: config.addonName, rank: route.rank, publicUrl: config.publicUrl, watchOrder: !!watchOrder }),
         ),
       );
     }
@@ -225,7 +237,19 @@ export function createApp(base: Config) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
-  createServer(createApp(config)).listen(config.port, config.host, () => {
+  let watchOrder: WatchOrderStore | undefined;
+  if (config.watchOrder) {
+    if (!config.publicUrl) {
+      console.error('[watch-order] disabled: PUBLIC_URL is required, thumbnails need absolute URLs');
+    } else {
+      watchOrder = new WatchOrderStore(config.watchOrderDir);
+      watchOrder.start();
+      if (config.watchOrderBuilder === 'internal') {
+        startScheduler({ dir: config.watchOrderDir, hour: config.watchOrderHour, publicUrl: config.publicUrl, store: watchOrder });
+      }
+    }
+  }
+  createServer(createApp(config, watchOrder ? { watchOrder } : {})).listen(config.port, config.host, () => {
     console.log(`subranker listening on ${config.host}:${config.port}`);
   });
 }
