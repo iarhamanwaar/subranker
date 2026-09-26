@@ -67,7 +67,7 @@ export async function expand(f: Franchise, get: MetaGetter, today: string): Prom
       eps.forEach((v, i) => {
         entries.push({
           kind: 'episode', item: it, order, id: v.id, name: v.name ?? v.title ?? `Episode ${v.episode}`, released: day(v.released),
-          thumbnail: v.thumbnail, desc: v.overview ?? v.description, video: v, season: v.season, episode: v.episode,
+          thumbnail: it.still?.(v) ?? v.thumbnail, desc: v.overview ?? v.description, video: v, season: v.season, episode: v.episode,
           index: i, count: eps.length, seasonCount: eps.filter((x) => x.season === v.season).length, multiSeason,
         });
       });

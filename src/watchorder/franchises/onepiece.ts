@@ -28,6 +28,28 @@ const LOOK: Array<[string, Group['pattern']]> = [
   ['#3a7bd5', pat.gradient('#101a3a', '#3a7bd5', '#8ff0ff')], // Final
 ];
 
+/**
+ * The image host files One Piece stills under TMDB's seasons, numbered by
+ * overall episode (TMDB season 13 = episodes 422-522), not by IMDb season.
+ * Boundaries found by probing every episode on 2026-09-26: no gaps.
+ */
+const TMDB_SEASONS: Array<[number, number]> = [
+  [1, 1], [2, 62], [3, 78], [4, 92], [5, 131], [6, 144], [7, 196], [8, 229], [9, 264], [10, 337], [11, 382], [12, 408],
+  [13, 422], [14, 523], [15, 581], [16, 643], [17, 693], [18, 749], [19, 804], [20, 878], [21, 892], [22, 1089], [23, 1156],
+];
+function stillFor(abs: number): string {
+  let season = 1;
+  for (const [s, from] of TMDB_SEASONS) if (abs >= from) season = s;
+  return `https://episodes.metahub.space/${OP}/${season}/${abs}/w780.jpg`;
+}
+const absOf = new Map<string, number>();
+for (const s of SAGAS) for (const it of s.items) if ('abs' in it) it.ids.forEach((id, i) => absOf.set(id, it.abs[i]!));
+// Cinemeta season 23 (Elbaph) starts at overall episode 1156.
+const still = (v: { id: string; season: number; episode: number }) => {
+  const abs = absOf.get(v.id) ?? (v.season === 23 ? 1155 + v.episode : undefined);
+  return abs ? stillFor(abs) : undefined;
+};
+
 const groups: Record<number, Group> = {};
 const plan: Array<[number, Item[]]> = [];
 SAGAS.forEach((s, i) => {
@@ -39,12 +61,12 @@ SAGAS.forEach((s, i) => {
       ? it.movie.includes(':')
         ? { series: OP, ids: [it.movie], title: it.title, optional: it.optional, optionalName: it.title, arc: () => it.title }
         : { movie: it.movie, title: it.title, optional: it.optional, optionalName: it.title }
-      : { series: OP, ids: it.ids, arc: () => it.arc, sub: () => `${s.saga} Saga` });
+      : { series: OP, ids: it.ids, arc: () => it.arc, sub: () => `${s.saga} Saga`, still });
   plan.push([g, items]);
 });
 // Elbaph onward, live: whatever Cinemeta has aired from season 23 on.
 const final = plan.find(([g]) => groups[g]!.short === 'Final')!;
-final[1].push({ series: OP, seasonsFrom: 23, arc: () => 'Elbaph', sub: () => 'Final Saga' });
+final[1].push({ series: OP, seasonsFrom: 23, arc: () => 'Elbaph', sub: () => 'Final Saga', still });
 
 export const onePiece: Franchise = {
   id: 'onepiece',

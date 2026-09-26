@@ -21,7 +21,7 @@ import { renderLogo, renderPoster, renderThumb } from './thumb.js';
 import type { Franchise, PlaylistVideo } from './types.js';
 
 /** Bump when the rendering changes, so every image is redrawn once. */
-const RENDER_VERSION = 4;
+const RENDER_VERSION = 5;
 
 export interface BuiltIndex {
   builtAt: string;
@@ -31,22 +31,32 @@ export interface BuiltIndex {
 
 const hash = (v: unknown) => createHash('sha1').update(JSON.stringify([RENDER_VERSION, v])).digest('hex').slice(0, 20);
 
-async function fetchImage(url: string | undefined): Promise<Buffer | undefined> {
-  if (!url) return undefined;
-  for (let attempt = 0; attempt < 3; attempt++) {
+/**
+ * Fetch a source image. `missing` is a real 404 (many older anime episodes
+ * have no still), which is final. `failed` is anything else (throttling,
+ * timeouts), which is worth retrying on the next run.
+ */
+type Fetched = { buf: Buffer } | { missing: true } | { failed: true };
+
+async function fetchImage(url: string | undefined): Promise<Fetched> {
+  if (!url) return { missing: true };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let wait = 2000 * 2 ** attempt;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-      if (res.ok) return Buffer.from(await res.arrayBuffer());
+      if (res.ok) return { buf: Buffer.from(await res.arrayBuffer()) };
       // Drain the body: an unread response keeps its connection open, and a
       // long build would pile up hundreds of them.
       await res.body?.cancel();
-      if (res.status === 404) return undefined;
+      if (res.status === 404 || res.status === 410) return { missing: true };
+      const after = Number(res.headers.get('retry-after'));
+      if (after > 0) wait = Math.min(after * 1000, 60_000);
     } catch {
       // retried below
     }
-    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    await new Promise((r) => setTimeout(r, wait));
   }
-  return undefined;
+  return { failed: true };
 }
 
 export async function build(opts: { dir: string; publicUrl: string; today?: string; only?: string[]; log?: (s: string) => void }) {
@@ -60,16 +70,24 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
   let rendered = 0;
   let missing = 0;
 
+  // Images drawn with a stand-in because their source failed to load. They
+  // are drawn again on the next run, so the real picture arrives by itself.
+  const provisionalFile = join(opts.dir, 'provisional.json');
+  const wasProvisional = new Set<string>(existsSync(provisionalFile) ? (JSON.parse(readFileSync(provisionalFile, 'utf8')) as string[]) : []);
+  const provisional = new Set<string>();
+
   // Render once per distinct input; later runs find the file and skip it.
-  async function image(key: unknown, ext: 'jpg' | 'png', render: () => Promise<Buffer>): Promise<string> {
+  async function image(key: unknown, ext: 'jpg' | 'png', render: () => Promise<{ buf: Buffer; final: boolean }>): Promise<string> {
     const name = `${hash(key)}.${ext}`;
     used.add(name);
     const file = join(imgDir, name);
-    if (!existsSync(file)) {
+    if (!existsSync(file) || wasProvisional.has(name)) {
+      const { buf, final } = await render();
       const tmp = `${file}.tmp`;
-      writeFileSync(tmp, await render());
+      writeFileSync(tmp, buf);
       renameSync(tmp, file);
       rendered++;
+      if (!final) provisional.add(name);
     }
     return name;
   }
@@ -82,10 +100,12 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
     const videos = await expand(f, get, today);
     const poster = await image(['poster', f.poster, patterns(f)], 'jpg', async () => {
       const src = await fetchImage(f.poster);
-      if (!src) throw new Error(`${f.id}: poster unavailable`);
-      return renderPoster({ image: src, patterns: patterns(f) });
+      if (!('buf' in src)) throw new Error(`${f.id}: poster unavailable`);
+      return { buf: await renderPoster({ image: src.buf, patterns: patterns(f) }), final: true };
     });
-    const logo = typeof f.logo === 'string' ? f.logo : imgUrl(await image(['logo', f.logo], 'png', () => renderLogo(f.logo as Exclude<Franchise['logo'], string>)));
+    const logoSpec = f.logo;
+    const logo = typeof logoSpec === 'string' ? logoSpec
+      : imgUrl(await image(['logo', logoSpec], 'png', async () => ({ buf: await renderLogo(logoSpec), final: true })));
 
     const out = [];
     let backdrop: Buffer | undefined;
@@ -93,12 +113,16 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
       const thumb = await image(['thumb', f.style, v.source, v.label, v.groupColor, v.groupPattern], 'jpg', async () => {
         // Many older anime episodes have no still on the image host; the
         // show's own backdrop beats a blank card.
-        let src = await fetchImage(v.source);
-        if (!src) {
+        const got = await fetchImage(v.source);
+        let src: Buffer | undefined;
+        if ('buf' in got) src = got.buf;
+        else {
           missing++;
-          src = backdrop ??= await fetchImage(f.background);
+          if (!backdrop) { const b = await fetchImage(f.background); if ('buf' in b) backdrop = b.buf; }
+          src = backdrop;
         }
-        return renderThumb({ image: src, style: f.style, label: v.label, color: v.groupColor, pattern: v.groupPattern });
+        const buf = await renderThumb({ image: src, style: f.style, label: v.label, color: v.groupColor, pattern: v.groupPattern });
+        return { buf, final: !('failed' in got) };
       });
       out.push(videoJson(v, imgUrl(thumb)));
     }
@@ -126,6 +150,10 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
   writeFileSync(`${file}.tmp`, JSON.stringify(index));
   renameSync(`${file}.tmp`, file);
 
+  // A partial build leaves other playlists' provisional images for later.
+  const keep = opts.only ? [...wasProvisional].filter((n) => !used.has(n)) : [];
+  writeFileSync(provisionalFile, JSON.stringify([...provisional, ...keep]));
+
   // Remove images nothing references any more, but only after a full build:
   // a partial one would delete thumbnails still in use.
   let pruned = 0;
@@ -134,7 +162,7 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
       if (!used.has(name)) { unlinkSync(join(imgDir, name)); pruned++; }
     }
   }
-  log(`done: ${franchises.length} playlists, ${rendered} images rendered (${missing} without an episode still), ${pruned} pruned`);
+  log(`done: ${franchises.length} playlists, ${rendered} images rendered, ${missing} without a still (${provisional.size} to retry next run), ${pruned} pruned`);
   return index;
 }
 

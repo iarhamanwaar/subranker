@@ -62,6 +62,12 @@ interface ItemBase {
   arc?: (v: SourceVideo) => string;
   /** Per-episode small caps line above the arc name. */
   sub?: (v: SourceVideo) => string;
+  /**
+   * Where to find an episode's still when Cinemeta's own URL has none. The
+   * image host files some long anime by overall episode number rather than
+   * by IMDb season (One Piece, Jujutsu Kaisen).
+   */
+  still?: (v: SourceVideo) => string | undefined;
 }
 
 export interface MovieItem extends ItemBase {
