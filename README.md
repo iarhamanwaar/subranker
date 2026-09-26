@@ -262,6 +262,47 @@ Each instance serves exactly its own position. The names describe the position
 rather than the release, because a manifest is fetched at install time and not
 per playback — no addon can show the actual release name this way.
 
+## Watch Order (optional)
+
+A second, unrelated job, off unless you turn it on: a Home row of franchise
+playlists in watch order. Each playlist is one card whose episode list is the
+whole order, films included, so autoplay runs from one to the next.
+
+| Playlist | Seasons are | Notes |
+|---|---|---|
+| MCU | Phases 1–6 | Release order; a show's seasons split where releases interleave (Loki S2 after Secret Invasion) |
+| X-Men | Four eras | The Fox films, then X-Men '97 |
+| Star Wars | Seven eras | Release order; The Clone Wars as its essential arcs; animated shows before the live-action ones that build on them |
+| Demon Slayer | Arcs | The Mugen Train TV arc rather than the film, since it contains the film |
+| Jujutsu Kaisen | Arcs | Jujutsu Kaisen 0 between seasons 1 and 2; recaps left out |
+| Attack on Titan | Arcs | OVAs as optional side stories where they belong |
+| One Piece | Sagas | Filler removed (mixed canon kept); films where they fit |
+
+Every video is the real title's id, so your stream and subtitle addons resolve
+it exactly as they would on the original. Optional entries are marked and
+greyed but stay in order.
+
+**Labels in the picture.** Stremio shows only "Season N" on its season buttons
+and, on Android TV, a thin line of text per episode. So each thumbnail carries
+its own label — arc, Phase or era, the title, its place in the order — drawn
+into the image in the corner Stremio leaves free.
+
+**Kept current without you.** A nightly build picks up what has aired since:
+new episodes of a running show, a film on its release day. Titles are listed
+before they come out and appear once they do.
+
+**Cheap to serve.** The build runs as a separate lowest-priority process and
+only draws what is new, so it never delays a subtitle request. Playlists are
+served from memory, pre-compressed, with validators; thumbnails are named by
+their content and cached indefinitely. A playlist of 283 titles is about 22 KB
+on the wire.
+
+To enable it set `WATCH_ORDER=true` and `PUBLIC_URL` (thumbnails need absolute
+URLs), and keep `WATCH_ORDER_DIR` on a persistent volume so thumbnails survive
+restarts. Users of the instance can switch the row off for their own install on
+the setup page. Stremio caches manifests, so reinstall the addon after changing
+this.
+
 ## Setup
 
 There is no public instance to install. SubRanker fetches subtitle files on
@@ -305,6 +346,10 @@ instance works without a local build.
 `PUBLIC_URL` matters as soon as you enable timing repair: corrected subtitles
 and the addon icon are fetched by the client at an absolute URL, so the
 instance has to know its own address.
+
+For [Watch Order](#watch-order-optional) add `-e WATCH_ORDER=true` and mount a
+volume at `/app/data` (`-v subranker-data:/app/data`), so thumbnails are drawn
+once rather than on every restart. The compose file already has the volume.
 
 Put a reverse proxy in front for TLS — Stremio refuses plain HTTP for anything
 that is not localhost.
@@ -353,6 +398,10 @@ it directly is a little faster and guarantees the ordering survives.
 | `RELABEL` | `true` | Rewrite `lang` as well as `label`. See the note below |
 | `CACHE_TTL` | `3600` | Seconds to cache a computed response |
 | `PROBE_LABELS` | `false` | Diagnostic: return one row per candidate label format |
+| `WATCH_ORDER` | `false` | Serve the Watch Order row. Needs `PUBLIC_URL` |
+| `WATCH_ORDER_DIR` | `./data/watch-order` | Built playlists and thumbnails. Keep it on a persistent volume |
+| `WATCH_ORDER_HOUR` | `4` | Local hour of the nightly rebuild |
+| `WATCH_ORDER_BUILDER` | `internal` | `internal`: this server runs the nightly build as a low-priority child process. `external`: something else runs `node dist/watchorder/build.js` (a systemd timer with its own limits) and this server only serves the result |
 
 ### A note on `RELABEL`
 

@@ -91,6 +91,20 @@ describe('expand', () => {
     expect(v.map((x) => (x.label as { pos: string }).pos)).toEqual(['1/2', '2/2']);
   });
 
+  it('numbers titles among those already out', async () => {
+    const western: Franchise = {
+      ...anime, style: 'western',
+      plan: [[1, [{ movie: 'tt9', short: 'Movie' }, { movie: 'tt8', short: 'Next' }, { series: 'tt1', seasons: [2], short: 'Show' }]]],
+      label: titleLabel({ word: 'Phase', numOf: String }),
+    };
+    const v = await expand(western, get, TODAY);
+    expect(v[0]!.overview.startsWith('Phase 1 · #1 of 2 ·')).toBe(true);
+    expect(v[1]!.label).toMatchObject({ pos: 'E1/1' });
+    expect(v[1]!.overview.startsWith('Phase 1 · #2 ·')).toBe(true);
+    const later = await expand(western, get, '2027-02-01');
+    expect(later[0]!.overview.startsWith('Phase 1 · #1 of 3 ·')).toBe(true);
+  });
+
   it('keeps descriptions to what the TV can show', async () => {
     const long = { ...SOURCES['movie/tt9']!, description: 'word '.repeat(200) };
     const v = await expand({ ...anime, plan: [[1, [{ movie: 'tt9' }]]] }, async () => long, TODAY);

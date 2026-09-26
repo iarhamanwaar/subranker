@@ -37,8 +37,8 @@ function wanted(it: Extract<Item, { series: string }>, v: SourceVideo): boolean 
 
 export async function expand(f: Franchise, get: MetaGetter, today: string): Promise<PlaylistVideo[]> {
   const videos: PlaylistVideo[] = [];
-  const totalTitles = f.plan.reduce((n, [, items]) => n + items.length, 0);
-  let order = 0;
+  const resolved: Array<{ g: number; entries: Entry[] }> = [];
+  const order = 0; // assigned below, once it is known which titles are out
 
   for (const [g, items] of f.plan) {
     const group = f.groups[g];
@@ -48,7 +48,6 @@ export async function expand(f: Franchise, get: MetaGetter, today: string): Prom
     // before anything is labelled.
     const entries: Entry[] = [];
     for (const it of items) {
-      order++;
       if ('movie' in it) {
         const m = await get('movie', it.movie);
         if (!aired(m.released, today)) continue;
@@ -73,6 +72,18 @@ export async function expand(f: Franchise, get: MetaGetter, today: string): Prom
       });
     }
 
+    resolved.push({ g, entries });
+  }
+
+  // Number titles among those actually out: "#14 of 62" must not count films
+  // that are announced but not released.
+  const titles = new Map<Item, number>();
+  for (const { entries } of resolved) for (const e of entries) if (!titles.has(e.item)) titles.set(e.item, titles.size + 1);
+  const totalTitles = titles.size;
+
+  for (const { g, entries } of resolved) {
+    const group = f.groups[g]!;
+    for (const e of entries) e.order = titles.get(e.item)!;
     const main = entries.filter((e) => !e.item.optional);
     const optional = entries.filter((e) => e.item.optional);
     entries.forEach((e, n) => {
