@@ -20,7 +20,8 @@ import { configurePage } from './configure.js';
 import { buildManifest } from './manifest.js';
 import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
-import { runPipeline } from './pipeline.js';
+import { runPipeline, type RequestIdentity } from './pipeline.js';
+import { episodeTitleFor, parseSeriesId } from './meta/episode.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
 import type { RequestExtras } from './types.js';
@@ -194,7 +195,25 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         return send(res, 200, JSON.stringify({ subtitles: buildProbeSubtitles(subs[0]) }));
       }
 
-      const result = await runPipeline(subs, parsed.extras, config);
+      // Resolve the requested episode's authoritative identity. Prefer the
+      // IMDb id the upstream query resolved to (a Kitsu id is mapped there),
+      // falling back to the id as requested.
+      let sid = parseSeriesId(parsed.id);
+      if (!sid && merged.resolvedPath) {
+        const rm = /^\/subtitles\/[^/]+\/([^/]+?)(?:\/.+)?\.json$/.exec(merged.resolvedPath);
+        if (rm) sid = parseSeriesId(decodeURIComponent(rm[1]!));
+      }
+      let identity: RequestIdentity = {};
+      if (sid) {
+        const episodeTitle = await episodeTitleFor(sid.imdbId, sid.season, sid.episode);
+        identity = {
+          season: sid.season,
+          episode: sid.episode,
+          ...(episodeTitle !== undefined ? { episodeTitle } : {}),
+        };
+      }
+
+      const result = await runPipeline(subs, parsed.extras, config, identity);
 
       // A rank-pinned instance returns exactly its own position, so that
       // installing several gives one named row each.

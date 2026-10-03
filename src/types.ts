@@ -64,6 +64,12 @@ export interface Candidate {
   score: number;
   /** Human-readable reasons, highest-impact first. Surfaced in the label. */
   reasons: string[];
+  /**
+   * The release name carries the requested episode's authoritative title, so
+   * this is the right episode whatever season number the upstream stamped on
+   * it. Used to anchor the consensus timeline on the correct arc.
+   */
+  identity?: boolean;
   /** Set when the candidate is removed rather than ranked. */
   dropped?: string;
   verification?: Verification;

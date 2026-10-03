@@ -43,6 +43,36 @@ export const MISMATCH_PENALTIES = {
 } as const;
 
 /**
+ * Bonus for a release name that carries the requested episode's own title.
+ *
+ * This is near-definitive identity: episode titles are distinctive, and a sub
+ * naming "Sound Hashira Tengen Uzui" is that episode no matter what season
+ * number the upstream filed it under. Weighted above a group match so it wins
+ * the arc when an upstream mislabels a different arc under the same id.
+ */
+export const IDENTITY_WEIGHT = 50;
+
+/**
+ * Penalty for a release that states a season other than the one requested.
+ *
+ * The requested season comes from the id and is authoritative, but season
+ * numbers on anime releases follow conflicting conventions, so this demotes
+ * rather than drops: a sub carrying the right episode title still outscores it.
+ */
+export const SEASON_MISMATCH_PENALTY = 40;
+
+/** Shortest title worth matching on; shorter ones invite coincidental hits. */
+const MIN_IDENTITY_LENGTH = 8;
+
+/** True when the release text contains the episode title, ignoring punctuation. */
+export function matchesEpisodeTitle(releaseText: string, episodeTitle: string | undefined): boolean {
+  if (!episodeTitle) return false;
+  const t = normalise(episodeTitle);
+  if (t.length < MIN_IDENTITY_LENGTH) return false;
+  return normalise(releaseText).includes(t);
+}
+
+/**
  * Maximum bonus awarded for agreeing with the consensus timeline.
  *
  * This is the fallback evidence when the release name carries no group. Players
@@ -67,6 +97,8 @@ export interface ScoreOptions {
   preferSubbed: boolean;
   /** Remove candidates judged clear mismatches instead of ranking them low. */
   dropMismatches: boolean;
+  /** The requested episode's authoritative title, when it could be resolved. */
+  episodeTitle?: string;
 }
 
 export const DEFAULT_SCORE_OPTIONS: ScoreOptions = {
@@ -93,7 +125,7 @@ export function scoreCandidate(
   target: ParsedRelease,
   extras: RequestExtras,
   options: ScoreOptions,
-): { score: number; reasons: string[]; dropped?: string } {
+): { score: number; reasons: string[]; dropped?: string; identity?: boolean } {
   const reasons: string[] = [];
   const p = candidate.parsed;
   let score = 0;
@@ -119,6 +151,32 @@ export function scoreCandidate(
   }
 
   // --- positive evidence -------------------------------------------------
+
+  // The release name carries the requested episode's own title: this is the
+  // right episode whatever season the upstream stamped on it. Every name field
+  // is searched, not just the chosen releaseText — an upstream often puts the
+  // episode title only in the filename while releaseName holds the series name,
+  // and a title match in any one field (or any language) is enough to anchor on.
+  const names = [
+    candidate.raw.releaseName,
+    candidate.raw.fileName,
+    candidate.raw.title,
+    candidate.raw.label,
+    candidate.releaseText,
+  ].filter((s): s is string => typeof s === 'string');
+  const identity = names.some((n) => matchesEpisodeTitle(n, options.episodeTitle));
+  if (identity) {
+    score += IDENTITY_WEIGHT;
+    reasons.push('episode match');
+  }
+
+  // A stated season other than the one requested is evidence of the wrong arc.
+  // Demoted, not dropped: anime season numbers follow conflicting conventions,
+  // and a sub naming the right episode title must still be able to win.
+  if (target.season !== undefined && p.season !== undefined && p.season !== target.season) {
+    score -= SEASON_MISMATCH_PENALTY;
+    reasons.push('wrong season');
+  }
 
   if (hasHashMatch(candidate.raw, extras)) {
     score += HASH_WEIGHT;
@@ -166,7 +224,7 @@ export function scoreCandidate(
 
   if (p.sdh) reasons.push('SDH');
 
-  return { score, reasons };
+  return { score, reasons, identity };
 }
 
 function normalise(s: string): string {
@@ -188,8 +246,8 @@ export function scoreAll(
   options: ScoreOptions = DEFAULT_SCORE_OPTIONS,
 ): Candidate[] {
   const scored = candidates.map((c) => {
-    const { score, reasons, dropped } = scoreCandidate(c, target, extras, options);
-    return { ...c, score, reasons, dropped };
+    const { score, reasons, dropped, identity } = scoreCandidate(c, target, extras, options);
+    return { ...c, score, reasons, dropped, identity };
   });
 
   const survivors = scored.filter((c) => !c.dropped);

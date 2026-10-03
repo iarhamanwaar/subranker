@@ -109,3 +109,49 @@ describe('mismatch penalties', () => {
     expect(scored!.score).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('episode identity and season', () => {
+  // The real failure: upstream files Swordsmith Village (Cinemeta S4) subtitles
+  // under Entertainment District's id (tt9335498:3:1). The requested episode is
+  // "Sound Hashira Tengen Uzui"; the correct sub names it, the wrong ones carry
+  // a different season or arc. Ranking on the id alone cannot tell them apart.
+  const EP_TITLE = 'Sound Hashira Tengen Uzui';
+  const reqTarget = async () => ({ ...(await parseRelease('')), season: 3, episode: 1 });
+
+  it('lifts the sub that names the requested episode above the mislabelled majority', async () => {
+    const target = await reqTarget();
+    const cands = [
+      await candidate('Demon.Slayer.Kimetsu.no.Yaiba.S03E01.JAPANESE.720p.WEBRip'),
+      await candidate('Demon Slayer - Kimetsu no Yaiba (2019) - S04E01 - Someones Dream'),
+      await candidate('[Crunchyroll] Demon Slayer S03E01 Sound Hashira Tengen Uzui'),
+    ];
+    const ranked = rank(
+      scoreAll(cands, target, {}, { ...DEFAULT_SCORE_OPTIONS, episodeTitle: EP_TITLE }),
+    );
+    expect(ranked[0]?.releaseText).toContain('Sound Hashira Tengen Uzui');
+    expect(ranked[0]?.identity).toBe(true);
+    expect(ranked[0]?.reasons).toContain('episode match');
+  });
+
+  it('demotes a stated wrong season without dropping it', async () => {
+    const target = await reqTarget();
+    const [scored] = scoreAll(
+      [await candidate('Demon Slayer - S04E01 - Someones Dream Bluray-1080p')],
+      target,
+      {},
+    );
+    expect(scored!.dropped).toBeUndefined();
+    expect(scored!.reasons).toContain('wrong season');
+    expect(scored!.score).toBeLessThan(0);
+  });
+
+  it('does not flag identity when no episode title is known', async () => {
+    const target = await reqTarget();
+    const [scored] = scoreAll(
+      [await candidate('[Crunchyroll] Demon Slayer S03E01 Sound Hashira Tengen Uzui')],
+      target,
+      {},
+    );
+    expect(scored!.identity).toBeFalsy();
+  });
+});

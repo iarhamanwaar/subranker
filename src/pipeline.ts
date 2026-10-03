@@ -111,7 +111,17 @@ async function verifyTop(
   );
 
   const alive = fetched.filter((f) => f.result.verification.ok);
-  const { reference, support } = consensusTimeline(alive.map((f) => f.result.timeline));
+
+  // Anchor on the subtitles known to be the right episode by title, when any
+  // survived. An upstream that mislabels a different arc under the same id
+  // often returns more of the wrong arc than the right one, so the plain
+  // medoid would converge on the wrong timing and then penalise every correct
+  // file as a "mismatch". An identity match is authoritative, so its timing is
+  // the reference and the wrong arc is what gets penalised instead.
+  const identityAlive = alive.filter((f) => f.c.identity);
+  const { reference, support } = identityAlive.length
+    ? { reference: consensusTimeline(identityAlive.map((f) => f.result.timeline)).reference, support: 1 }
+    : consensusTimeline(alive.map((f) => f.result.timeline));
 
   // With no majority behind the anchor there is nothing to measure against, so
   // report timings as unknown rather than inventing corrections from noise.
@@ -198,17 +208,35 @@ export function capPerLanguage<T extends { raw: { lang: string } }>(
   return kept;
 }
 
+/**
+ * The authoritative identity of the requested episode, from its Stremio id and
+ * (when resolvable) Cinemeta. The season and episode here override whatever the
+ * filename parses to, because the id is not subject to a release's numbering.
+ */
+export interface RequestIdentity {
+  season?: number;
+  episode?: number;
+  episodeTitle?: string;
+}
+
 export async function runPipeline(
   subs: RawSubtitle[],
   extras: RequestExtras,
   config: Config,
+  identity: RequestIdentity = {},
 ): Promise<PipelineResult> {
-  const target = await parseRelease(extras.filename ?? '');
+  const parsed = await parseRelease(extras.filename ?? '');
+  const target: ParsedRelease = {
+    ...parsed,
+    season: identity.season ?? parsed.season,
+    episode: identity.episode ?? parsed.episode,
+  };
   const candidates = await buildCandidates(subs);
 
   const scored = scoreAll(candidates, target, extras, {
     preferSubbed: true,
     dropMismatches: config.dropMismatches,
+    ...(identity.episodeTitle !== undefined ? { episodeTitle: identity.episodeTitle } : {}),
   });
 
   let ordered = rank(scored);
