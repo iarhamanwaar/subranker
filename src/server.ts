@@ -223,6 +223,7 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         if (rm) sid = parseSeriesId(decodeURIComponent(rm[1]!));
       }
       let identity: RequestIdentity = {};
+      let expandedPool = false;
       if (sid) {
         const episodeTitle = await episodeTitleFor(sid.imdbId, sid.season, sid.episode);
         identity = {
@@ -238,6 +239,7 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         // adjacent seasons' same episode so the title-bearing anchor is in the
         // pool; the pipeline then anchors the correct arc and penalises the rest.
         if (episodeTitle && !hasTitleBearingSub(subs, episodeTitle)) {
+          expandedPool = true;
           const neighbours = [sid.season - 1, sid.season + 1].filter((s) => s >= 1);
           const extra = await Promise.all(
             neighbours.map((s) =>
@@ -256,7 +258,17 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         }
       }
 
-      const result = await runPipeline(subs, parsed.extras, config, identity);
+      // After merging adjacent seasons the pool is several times larger, and
+      // the correct arc's files rank low by name (their stated season does not
+      // match the request), so a normal verification window never reaches them
+      // to measure their timing against the anchor. Verify the whole expanded
+      // pool in that case — the fetches run in parallel, so it costs little.
+      const runConfig =
+        expandedPool && subs.length > config.verifyLimit
+          ? { ...config, verifyLimit: Math.min(subs.length, 80) }
+          : config;
+
+      const result = await runPipeline(subs, parsed.extras, runConfig, identity);
 
       // A rank-pinned instance returns exactly its own position, so that
       // installing several gives one named row each.
