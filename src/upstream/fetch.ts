@@ -19,6 +19,11 @@ export interface UpstreamResult {
   failed: Array<{ base: string; error: string }>;
 }
 
+/** A non-empty trimmed string, or undefined — for reading loosely-typed extras. */
+function asText(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+}
+
 function shortName(base: string): string {
   try {
     return new URL(base).hostname.replace(/^www\./, '').split('.')[0] ?? base;
@@ -48,6 +53,13 @@ async function fetchOne(
         ...s,
         id: `${tag}:${s.id}`,
         upstream: tag,
+        // OpenSubtitles V3+ names its release fields `subtitleFileName` and
+        // `movieReleaseName`; map them onto the standard names so release-name
+        // scoring and episode-identity matching can see them. Without this the
+        // only text available for an OpenSubtitles entry is its id, and every
+        // release signal (group, source, resolution, episode title) is blind.
+        releaseName: asText(s.releaseName) ?? asText(s.movieReleaseName),
+        fileName: asText(s.fileName) ?? asText(s.subtitleFileName),
       })),
     };
   } catch (err) {

@@ -83,3 +83,29 @@ describe('verification timeout guard', () => {
     expect(r.verification.ok).toBe(true);
   });
 });
+
+describe('OpenSubtitles field mapping', () => {
+  it('maps subtitleFileName/movieReleaseName onto the standard fields', async () => {
+    vi.stubGlobal('fetch', mockFetch({
+      'https://os.example': { subtitles: [{
+        id: '42', url: 'https://cdn/os.srt', lang: 'fre',
+        subtitleFileName: '[Crunchyroll] Demon Slayer S03E01 Sound Hashira Tengen Uzui.srt',
+        movieReleaseName: 'Demon Slayer S03E01',
+      }] },
+    }));
+    const r = await fetchUpstreams(['https://os.example'], PATH);
+    expect(r.subtitles[0]?.fileName).toContain('Sound Hashira Tengen Uzui');
+    expect(r.subtitles[0]?.releaseName).toBe('Demon Slayer S03E01');
+  });
+
+  it('does not overwrite a release name the upstream already provided', async () => {
+    vi.stubGlobal('fetch', mockFetch({
+      'https://a.example': { subtitles: [{
+        id: '1', url: 'https://cdn/a.srt', lang: 'eng',
+        fileName: 'Real.Name.mkv', subtitleFileName: 'Ignored.srt',
+      }] },
+    }));
+    const r = await fetchUpstreams(['https://a.example'], PATH);
+    expect(r.subtitles[0]?.fileName).toBe('Real.Name.mkv');
+  });
+});
