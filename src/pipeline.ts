@@ -62,6 +62,24 @@ export interface Consensus {
 /** Agreement above which two timelines are considered to be the same cut. */
 const SAME_CUT_AGREEMENT = 0.5;
 
+/** A timeline needs at least this many cues to be worth aligning against. */
+const MIN_USABLE_CUES = 5;
+
+/**
+ * The timing reference drawn from the episode-identity matches, or null.
+ *
+ * A title match is authoritative about *which episode* a file is, so when any
+ * survive they, not the medoid of the whole (possibly arc-polluted) pool, set
+ * the reference. But the anchor still has to be a usable timeline: a title
+ * match on a near-empty file must not be trusted as if it were full, so in that
+ * case we return null and the caller falls back to the ordinary consensus.
+ */
+export function identityReference(identityTimelines: Timeline[]): Timeline | null {
+  if (identityTimelines.length === 0) return null;
+  const reference = consensusTimeline(identityTimelines).reference;
+  return reference.length >= MIN_USABLE_CUES ? reference : null;
+}
+
 export function consensusTimeline(timelines: Timeline[]): Consensus {
   const usable = timelines.filter((t) => t.length >= 5);
   if (usable.length === 0) return { reference: timelines[0] ?? [], support: 0 };
@@ -119,8 +137,9 @@ async function verifyTop(
   // file as a "mismatch". An identity match is authoritative, so its timing is
   // the reference and the wrong arc is what gets penalised instead.
   const identityAlive = alive.filter((f) => f.c.identity);
-  const { reference, support } = identityAlive.length
-    ? { reference: consensusTimeline(identityAlive.map((f) => f.result.timeline)).reference, support: 1 }
+  const identityAnchor = identityReference(identityAlive.map((f) => f.result.timeline));
+  const { reference, support } = identityAnchor
+    ? { reference: identityAnchor, support: 1 }
     : consensusTimeline(alive.map((f) => f.result.timeline));
 
   // With no majority behind the anchor there is nothing to measure against, so

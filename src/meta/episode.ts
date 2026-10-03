@@ -18,6 +18,13 @@
 
 const BASE = process.env.CINEMETA_BASE ?? 'https://v3-cinemeta.strem.io';
 const TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * A failed lookup is cached only briefly, so a passing Cinemeta hiccup cannot
+ * disable the identity anchor for the full six hours. Without this a single
+ * timeout would strip the arc-matching from every request for that series
+ * until the entry aged out.
+ */
+const NEGATIVE_TTL_MS = 60 * 1000;
 const TIMEOUT_MS = 4000;
 const MAX_ENTRIES = 500;
 
@@ -29,11 +36,11 @@ interface MetaVideo {
   title?: string;
 }
 
-const cache = new Map<string, { at: number; videos: MetaVideo[] | null }>();
+const cache = new Map<string, { at: number; ttl: number; videos: MetaVideo[] | null }>();
 
 async function seriesVideos(imdbId: string): Promise<MetaVideo[] | null> {
   const hit = cache.get(imdbId);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.videos;
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.videos;
 
   let videos: MetaVideo[] | null = null;
   try {
@@ -53,7 +60,7 @@ async function seriesVideos(imdbId: string): Promise<MetaVideo[] | null> {
     const oldest = cache.keys().next();
     if (!oldest.done) cache.delete(oldest.value);
   }
-  cache.set(imdbId, { at: Date.now(), videos });
+  cache.set(imdbId, { at: Date.now(), ttl: videos ? TTL_MS : NEGATIVE_TTL_MS, videos });
   return videos;
 }
 

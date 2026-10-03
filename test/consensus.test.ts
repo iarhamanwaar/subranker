@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { consensusTimeline } from '../src/pipeline.js';
+import { consensusTimeline, identityReference } from '../src/pipeline.js';
 import { applyTimingScore, TIMING_BONUS } from '../src/score/score.js';
 import type { Candidate } from '../src/types.js';
 
@@ -91,5 +91,20 @@ describe('anchor support', () => {
     const { support } = consensusTimeline([a, b, c]);
     // Nothing commands a majority, so shifting must be refused downstream.
     expect(support).toBeLessThan(0.5);
+  });
+});
+
+describe('identityReference', () => {
+  it('returns null when there are no identity timelines', () => {
+    expect(identityReference([])).toBeNull();
+  });
+
+  it('refuses an anchor that is too short to align against', () => {
+    expect(identityReference([[1, 2, 3]])).toBeNull();
+  });
+
+  it('anchors on the identity timeline when it is usable', () => {
+    const ref = identityReference([base]);
+    expect(ref).toBe(base);
   });
 });
