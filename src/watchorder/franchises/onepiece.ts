@@ -56,12 +56,14 @@ SAGAS.forEach((s, i) => {
   const g = i + 1;
   const [color, pattern] = LOOK[i]!;
   groups[g] = { num: KANJI[g]!, name: `${s.saga} Saga`, short: s.saga, color, pattern };
-  const items: Item[] = s.items.map((it) =>
-    'movie' in it
-      ? it.movie.includes(':')
-        ? { series: OP, ids: [it.movie], title: it.title, optional: it.optional, optionalName: it.title, arc: () => it.title }
-        : { movie: it.movie, title: it.title, optional: it.optional, optionalName: it.title }
-      : { series: OP, ids: it.ids, arc: () => it.arc, sub: () => `${s.saga} Saga`, still });
+  const items: Item[] = s.items
+    .filter((it) => !('optional' in it && it.optional))
+    .map((it) =>
+      'movie' in it
+        ? it.movie.includes(':')
+          ? { series: OP, ids: [it.movie], title: it.title, arc: () => it.title }
+          : { movie: it.movie, title: it.title }
+        : { series: OP, ids: it.ids, arc: () => it.arc, sub: () => `${s.saga} Saga`, still });
   plan.push([g, items]);
 });
 // Elbaph onward, live: whatever Cinemeta has aired from season 23 on.

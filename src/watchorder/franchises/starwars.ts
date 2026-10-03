@@ -43,12 +43,9 @@ export const starWars: Franchise = {
     [1, [{ movie: 'tt0076759', short: 'A New Hope' }, { movie: 'tt0080684', short: 'Empire Strikes Back' }, { movie: 'tt0086190', short: 'Return of the Jedi' }]],
     [2, [
       { movie: 'tt0120915', short: 'The Phantom Menace' }, { movie: 'tt0121765', short: 'Attack of the Clones' },
-      { series: 'tt0361243', seasons: 'all', short: 'Clone Wars (2003)', title: 'Clone Wars (2003)', optional: true, note: 'Short, not canon; leads into Revenge of the Sith.' },
       { movie: 'tt0121766', short: 'Revenge of the Sith' },
     ]],
     [3, [
-      { movie: 'tt1185834', short: 'The Clone Wars film', optional: true },
-      tcw([[1, 5]], { optional: true }),
       tcw([[2, 12, 14], [3, 12, 17], [4, 7, 10], [4, 21, 22], [5, 1], [5, 14, 20], [6, 1, 4]]),
     ]],
     [4, [
@@ -64,11 +61,9 @@ export const starWars: Franchise = {
     [5, [
       { series: 'tt8111088', seasons: [1], short: 'The Mandalorian', title: 'The Mandalorian' },
       tcw([[7, 1, 4]]),
-      tcw([[7, 5, 8]], { optional: true }),
       tcw([[7, 9, 12]]),
       { series: 'tt8111088', seasons: [2], short: 'The Mandalorian', title: 'The Mandalorian' },
       { series: 'tt12708542', seasons: [1], short: 'The Bad Batch', title: 'The Bad Batch' },
-      { series: 'tt13622982', seasons: [1], short: 'Visions', title: 'Visions', optional: true },
       { series: 'tt13668894', seasons: [1], short: 'Book of Boba Fett', title: 'The Book of Boba Fett', note: 'Chapters 5-7 lead into The Mandalorian S3.' },
       { series: 'tt8466564', seasons: [1], short: 'Obi-Wan Kenobi', title: 'Obi-Wan Kenobi' },
     ]],
@@ -77,20 +72,16 @@ export const starWars: Franchise = {
       { series: 'tt20723374', seasons: [1], short: 'Tales of the Jedi', title: 'Tales of the Jedi' },
       { series: 'tt12708542', seasons: [2], short: 'The Bad Batch', title: 'The Bad Batch' },
       { series: 'tt8111088', seasons: [3], short: 'The Mandalorian', title: 'The Mandalorian' },
-      { series: 'tt13622982', seasons: [2], short: 'Visions', title: 'Visions', optional: true },
       { series: 'tt13622776', seasons: [1], short: 'Ahsoka', title: 'Ahsoka', note: 'Continues Rebels directly.' },
       { series: 'tt12708542', seasons: [3], short: 'The Bad Batch', title: 'The Bad Batch' },
       { series: 'tt32019314', seasons: [1], short: 'Tales of the Empire', title: 'Tales of the Empire' },
-      { series: 'tt12262202', seasons: [1], short: 'The Acolyte', title: 'The Acolyte', optional: true },
       { series: 'tt20600980', seasons: [1], short: 'Skeleton Crew', title: 'Skeleton Crew' },
     ]],
     [7, [
       { series: 'tt9253284', seasons: [2], short: 'Andor', title: 'Andor' },
       { series: 'tt36414431', seasons: [1], short: 'Tales of the Underworld', title: 'Tales of the Underworld' },
-      { series: 'tt13622982', seasons: [3], short: 'Visions', title: 'Visions', optional: true },
       { series: 'tt36594331', seasons: [1], short: 'Maul: Shadow Lord', title: 'Maul: Shadow Lord' },
       { movie: 'tt30825738', short: 'Mandalorian & Grogu' },
-      { series: 'tt43337681', seasons: [1], short: 'The Ninth Jedi', title: 'Visions Presents: The Ninth Jedi', optional: true },
       // Announced: appear once released.
       { series: 'tt13622776', seasons: [2], short: 'Ahsoka', title: 'Ahsoka' },
       { movie: 'tt28069611', short: 'Starfighter' },

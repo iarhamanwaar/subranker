@@ -3,20 +3,18 @@ import type { Franchise } from '../types.js';
 
 const AOT = 'tt2560140';
 const eps = (s: number, from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `${AOT}:${s}:${from + i}`);
-const ova = (ids: number[], name: string) => ({ series: AOT, ids: ids.map((e) => `${AOT}:0:${e}`), optional: true, optionalName: name });
 
 /**
- * The OVAs are optional, each placed where it came out and where guides put
- * it. Skipped: recaps, chibi theaters, compilation films, the Omnibus nights,
- * The Last Attack (the two final specials joined into one film) and the
- * live-action films.
+ * Skipped: the OVAs, recaps, chibi theaters, compilation films, the Omnibus
+ * nights, The Last Attack (the two final specials joined into one film) and
+ * the live-action films.
  */
 export const aot: Franchise = {
   id: 'aot',
   name: 'Attack on Titan · Watch Order',
   style: 'anime',
   releaseInfo: '2013–2023',
-  description: 'The whole series in release order, with the OVAs as optional side stories where they belong. Seasons are arcs; Season 3 is split at its Part 2.',
+  description: 'The whole series in release order. Seasons are arcs; Season 3 is split at its Part 2.',
   poster: `https://images.metahub.space/poster/medium/${AOT}/img`,
   background: `https://images.metahub.space/background/medium/${AOT}/img`,
   logo: `https://images.metahub.space/logo/medium/${AOT}/img`,
@@ -30,9 +28,9 @@ export const aot: Franchise = {
     7: { num: '漆', name: 'The Final Chapters', color: '#b89a5a', pattern: pat.gradient('#2a2216', '#b89a5a', '#f2e6c8') },
   },
   plan: [
-    [1, [{ series: AOT, seasons: [1] }, ova([7], "Ilse's Notebook"), ova([12], 'The Sudden Visitor'), ova([13], 'Distress'), ova([15, 17], 'No Regrets')]],
-    [2, [{ series: AOT, seasons: [2] }, ova([20, 22], 'Lost Girls')]],
-    [3, [{ series: AOT, ids: eps(3, 1, 12) }, ova([23], 'Lost Girls')]],
+    [1, [{ series: AOT, seasons: [1] }]],
+    [2, [{ series: AOT, seasons: [2] }]],
+    [3, [{ series: AOT, ids: eps(3, 1, 12) }]],
     [4, [{ series: AOT, ids: eps(3, 13, 22) }]],
     [5, [{ series: AOT, ids: eps(4, 1, 16) }]],
     [6, [{ series: AOT, ids: eps(4, 17, 28) }]],

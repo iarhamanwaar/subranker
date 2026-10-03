@@ -22,11 +22,7 @@ export const demonSlayer: Franchise = {
   },
   plan: [
     [1, [{ series: DS, seasons: [1] }]],
-    [2, [
-      { series: DS, seasons: [2] },
-      // Kimetsu Academy comedy shorts (Feb 2021), after the Mugen Train story.
-      { series: DS, ids: [`${DS}:0:3`, `${DS}:0:4`, `${DS}:0:5`, `${DS}:0:6`], optional: true, optionalName: 'Kimetsu Academy' },
-    ]],
+    [2, [{ series: DS, seasons: [2] }]],
     [3, [{ series: DS, seasons: [3] }]],
     [4, [{ series: DS, seasons: [4] }]],
     [5, [{ series: DS, seasons: [5] }]],
