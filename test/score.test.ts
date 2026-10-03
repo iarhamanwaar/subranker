@@ -133,7 +133,9 @@ describe('episode identity and season', () => {
     expect(ranked[0]?.reasons).toContain('episode match');
   });
 
-  it('demotes a stated wrong season without dropping it', async () => {
+  it('does not penalise a release that states a different season', async () => {
+    // Anime arcs are filed under conflicting season numbers, so the correct
+    // sub routinely states a "wrong" season — it must not be demoted for it.
     const target = await reqTarget();
     const [scored] = scoreAll(
       [await candidate('Demon Slayer - S04E01 - Someones Dream Bluray-1080p')],
@@ -141,8 +143,8 @@ describe('episode identity and season', () => {
       {},
     );
     expect(scored!.dropped).toBeUndefined();
-    expect(scored!.reasons).toContain('wrong season');
-    expect(scored!.score).toBeLessThan(0);
+    expect(scored!.reasons).not.toContain('wrong season');
+    expect(scored!.score).toBeGreaterThanOrEqual(0);
   });
 
   it('does not flag identity when no episode title is known', async () => {

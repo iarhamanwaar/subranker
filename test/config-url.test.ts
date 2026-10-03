@@ -15,7 +15,7 @@ const BASE: Config = {
   relabel: false,
   dropMismatches: true,
   verify: true,
-  verifyLimit: 15,
+  verifyLimit: 25,
   verifyTimeoutMs: 2500,
   cacheTtl: 3600,
   maxResults: 6,

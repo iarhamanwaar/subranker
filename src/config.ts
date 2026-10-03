@@ -142,7 +142,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     relabel: bool(env.RELABEL, true),
     dropMismatches: bool(env.DROP_MISMATCHES, true),
     verify: bool(env.VERIFY, true),
-    verifyLimit: int(env.VERIFY_LIMIT, 15),
+    verifyLimit: int(env.VERIFY_LIMIT, 25),
     verifyTimeoutMs: int(env.VERIFY_TIMEOUT_MS, 2500),
     cacheTtl: int(env.CACHE_TTL, 3600),
     maxResults: Number(env.MAX_RESULTS ?? 0) || 0,

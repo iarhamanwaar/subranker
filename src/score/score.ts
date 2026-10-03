@@ -52,15 +52,6 @@ export const MISMATCH_PENALTIES = {
  */
 export const IDENTITY_WEIGHT = 50;
 
-/**
- * Penalty for a release that states a season other than the one requested.
- *
- * The requested season comes from the id and is authoritative, but season
- * numbers on anime releases follow conflicting conventions, so this demotes
- * rather than drops: a sub carrying the right episode title still outscores it.
- */
-export const SEASON_MISMATCH_PENALTY = 40;
-
 /** Shortest title worth matching on; shorter ones invite coincidental hits. */
 const MIN_IDENTITY_LENGTH = 8;
 
@@ -177,20 +168,12 @@ export function scoreCandidate(
     reasons.push('episode match');
   }
 
-  // A stated season other than the one requested is evidence of the wrong arc.
-  // Demoted, not dropped: anime season numbers follow conflicting conventions.
-  // An episode-title match is exempt — it is authoritatively this episode, and
-  // the correct arc is often filed under a neighbouring season number, so the
-  // right sub frequently states a "wrong" season on purpose.
-  if (
-    !identity &&
-    target.season !== undefined &&
-    p.season !== undefined &&
-    p.season !== target.season
-  ) {
-    score -= SEASON_MISMATCH_PENALTY;
-    reasons.push('wrong season');
-  }
+  // No penalty for a stated season that differs from the requested one. Anime
+  // arcs are filed under conflicting season numbers across sources (IMDb vs
+  // Crunchyroll), and the correct arc is routinely under a neighbouring season,
+  // so penalising the number demotes exactly the right subtitle. The episode
+  // title and the consensus timeline tell arcs apart reliably; the season
+  // number does not. A wrong *episode* is still dropped as a hard mismatch.
 
   if (hasHashMatch(candidate.raw, extras)) {
     score += HASH_WEIGHT;
