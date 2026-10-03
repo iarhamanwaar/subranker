@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseExtras, parseSubtitlePath } from '../src/server.js';
+import { parseExtras, parseSubtitlePath, withSeason } from '../src/server.js';
 
 describe('parseExtras', () => {
   it('parses the full extras segment Stremio can send', () => {
@@ -49,5 +49,16 @@ describe('manifest version', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     expect(buildManifest({ name: 'SubRanker' }).version).toBe(pkg.version);
     expect(buildManifest({ name: 'SubRanker' }).version).not.toBe('0.0.0');
+  });
+});
+
+describe('withSeason', () => {
+  it('swaps the season in a plain id path, keeping episode and extras', () => {
+    expect(withSeason('/subtitles/series/tt9335498:4:1/filename=x.json', 'tt9335498', 4, 3, 1))
+      .toBe('/subtitles/series/tt9335498:3:1/filename=x.json');
+  });
+  it('handles percent-encoded ids', () => {
+    expect(withSeason('/subtitles/series/tt9335498%3A4%3A1.json', 'tt9335498', 4, 5, 1))
+      .toBe('/subtitles/series/tt9335498%3A5%3A1.json');
   });
 });

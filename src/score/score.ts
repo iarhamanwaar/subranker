@@ -6,7 +6,7 @@
  * hash weight deliberately exceeds the sum of every other weight, so an exact
  * file match always sorts first no matter what else disagrees.
  */
-import type { Candidate, ParsedRelease, RequestExtras } from '../types.js';
+import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from '../types.js';
 
 export const WEIGHTS = {
   group: 40,
@@ -70,6 +70,19 @@ export function matchesEpisodeTitle(releaseText: string, episodeTitle: string | 
   const t = normalise(episodeTitle);
   if (t.length < MIN_IDENTITY_LENGTH) return false;
   return normalise(releaseText).includes(t);
+}
+
+/** Every name an upstream gave a subtitle, for release matching. */
+export function subtitleNames(raw: RawSubtitle): string[] {
+  return [raw.releaseName, raw.fileName, raw.title, raw.label].filter(
+    (s): s is string => typeof s === 'string' && s.trim().length > 0,
+  );
+}
+
+/** Whether any subtitle's name carries the episode title — i.e. an anchor exists. */
+export function hasTitleBearingSub(subs: RawSubtitle[], episodeTitle: string | undefined): boolean {
+  if (!episodeTitle) return false;
+  return subs.some((s) => subtitleNames(s).some((n) => matchesEpisodeTitle(n, episodeTitle)));
 }
 
 /**
@@ -157,13 +170,7 @@ export function scoreCandidate(
   // is searched, not just the chosen releaseText — an upstream often puts the
   // episode title only in the filename while releaseName holds the series name,
   // and a title match in any one field (or any language) is enough to anchor on.
-  const names = [
-    candidate.raw.releaseName,
-    candidate.raw.fileName,
-    candidate.raw.title,
-    candidate.raw.label,
-    candidate.releaseText,
-  ].filter((s): s is string => typeof s === 'string');
+  const names = [...subtitleNames(candidate.raw), candidate.releaseText];
   const identity = names.some((n) => matchesEpisodeTitle(n, options.episodeTitle));
   if (identity) {
     score += IDENTITY_WEIGHT;
@@ -171,9 +178,16 @@ export function scoreCandidate(
   }
 
   // A stated season other than the one requested is evidence of the wrong arc.
-  // Demoted, not dropped: anime season numbers follow conflicting conventions,
-  // and a sub naming the right episode title must still be able to win.
-  if (target.season !== undefined && p.season !== undefined && p.season !== target.season) {
+  // Demoted, not dropped: anime season numbers follow conflicting conventions.
+  // An episode-title match is exempt — it is authoritatively this episode, and
+  // the correct arc is often filed under a neighbouring season number, so the
+  // right sub frequently states a "wrong" season on purpose.
+  if (
+    !identity &&
+    target.season !== undefined &&
+    p.season !== undefined &&
+    p.season !== target.season
+  ) {
     score -= SEASON_MISMATCH_PENALTY;
     reasons.push('wrong season');
   }

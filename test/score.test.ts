@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseRelease } from '../src/parse/release.js';
-import { DEFAULT_SCORE_OPTIONS, HASH_WEIGHT, rank, scoreAll } from '../src/score/score.js';
+import { DEFAULT_SCORE_OPTIONS, HASH_WEIGHT, hasTitleBearingSub, rank, scoreAll } from '../src/score/score.js';
 import type { Candidate, RequestExtras } from '../src/types.js';
 
 async function candidate(releaseText: string, extra: Record<string, unknown> = {}): Promise<Candidate> {
@@ -153,5 +153,26 @@ describe('episode identity and season', () => {
       {},
     );
     expect(scored!.identity).toBeFalsy();
+  });
+});
+
+describe('hasTitleBearingSub / subtitleNames', () => {
+  const sub = (extra: Record<string, unknown>) => ({ id: 'x', url: 'u', lang: 'eng', ...extra });
+
+  it('detects an episode title in any name field', () => {
+    const subs = [
+      sub({ fileName: '[Crunchyroll] Demon Slayer S03E01 Sound Hashira Tengen Uzui.srt' }),
+      sub({ releaseName: 'generic' }),
+    ];
+    expect(hasTitleBearingSub(subs, 'Sound Hashira Tengen Uzui')).toBe(true);
+  });
+
+  it('is false when no sub carries the title', () => {
+    const subs = [sub({ fileName: 'Demon.Slayer.S03E01.WEBRip.srt' })];
+    expect(hasTitleBearingSub(subs, 'Sound Hashira Tengen Uzui')).toBe(false);
+  });
+
+  it('is false when the title is unknown', () => {
+    expect(hasTitleBearingSub([sub({ fileName: 'anything' })], undefined)).toBe(false);
   });
 });

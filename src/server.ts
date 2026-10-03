@@ -22,6 +22,7 @@ import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { runPipeline, type RequestIdentity } from './pipeline.js';
 import { episodeTitleFor, parseSeriesId } from './meta/episode.js';
+import { hasTitleBearingSub } from './score/score.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
 import type { RequestExtras } from './types.js';
@@ -66,6 +67,24 @@ export function parseSubtitlePath(
     id: decodeURIComponent(rest.slice(0, slash)),
     extras: parseExtras(rest.slice(slash + 1)),
   };
+}
+
+/**
+ * The same subtitle path with the series id's season number changed, keeping
+ * the episode and the extras segment. Handles both the plain `:` and the
+ * percent-encoded `%3A` forms a client may send.
+ */
+export function withSeason(
+  rest: string,
+  imdbId: string,
+  fromSeason: number,
+  toSeason: number,
+  episode: number,
+): string {
+  const plain = `${imdbId}:${fromSeason}:${episode}`;
+  if (rest.includes(plain)) return rest.replace(plain, `${imdbId}:${toSeason}:${episode}`);
+  const enc = `${imdbId}%3A${fromSeason}%3A${episode}`;
+  return rest.replace(enc, `${imdbId}%3A${toSeason}%3A${episode}`);
 }
 
 interface CacheEntry {
@@ -189,7 +208,7 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
 
     try {
       const merged = await fetchForRequest(config.upstreamBases, route.rest);
-      const subs = merged.subtitles;
+      let subs = merged.subtitles;
 
       if (config.probeLabels) {
         return send(res, 200, JSON.stringify({ subtitles: buildProbeSubtitles(subs[0]) }));
@@ -211,6 +230,30 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
           episode: sid.episode,
           ...(episodeTitle !== undefined ? { episodeTitle } : {}),
         };
+
+        // When the requested episode has an authoritative title but nothing in
+        // this season's results carries it, the correct arc is almost certainly
+        // filed under a neighbouring season number — anime arcs drift by a
+        // season between the IMDb/Cinemeta and Crunchyroll numberings. Fetch the
+        // adjacent seasons' same episode so the title-bearing anchor is in the
+        // pool; the pipeline then anchors the correct arc and penalises the rest.
+        if (episodeTitle && !hasTitleBearingSub(subs, episodeTitle)) {
+          const neighbours = [sid.season - 1, sid.season + 1].filter((s) => s >= 1);
+          const extra = await Promise.all(
+            neighbours.map((s) =>
+              fetchForRequest(config.upstreamBases, withSeason(route.rest, sid!.imdbId, sid!.season, s, sid!.episode)),
+            ),
+          );
+          const seen = new Set(subs.map((s) => s.url));
+          for (const r of extra) {
+            for (const s of r.subtitles) {
+              if (!seen.has(s.url)) {
+                seen.add(s.url);
+                subs.push(s);
+              }
+            }
+          }
+        }
       }
 
       const result = await runPipeline(subs, parsed.extras, config, identity);
