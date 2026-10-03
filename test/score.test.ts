@@ -178,3 +178,48 @@ describe('hasTitleBearingSub / subtitleNames', () => {
     expect(hasTitleBearingSub([sub({ fileName: 'anything' })], undefined)).toBe(false);
   });
 });
+
+describe('arc-aware filtering', () => {
+  const SWORDSMITH = ['swordsmith village', 'katanakaji', 'sato hen'];
+  const OTHER_ARCS = ['entertainment district', 'yuukaku', 'hashira geiko', 'mugen ressha'];
+  const opts = { ...DEFAULT_SCORE_OPTIONS, arcKeywords: SWORDSMITH, foreignArcKeywords: OTHER_ARCS };
+
+  it('drops a subtitle that names a different arc', async () => {
+    const target = { ...(await parseRelease('')), season: 4, episode: 1 };
+    const [scored] = scoreAll(
+      [await candidate('[Erai-raws] Kimetsu no Yaiba - Hashira Geiko Hen - 01')],
+      target, {}, opts,
+    );
+    expect(scored!.dropped).toBe('wrong arc');
+  });
+
+  it('anchors a subtitle that names the requested arc', async () => {
+    const target = { ...(await parseRelease('')), season: 4, episode: 1 };
+    const [scored] = scoreAll(
+      [await candidate('[SubsPlease] Kimetsu no Yaiba - Katanakaji no Sato-hen - 01')],
+      target, {}, opts,
+    );
+    expect(scored!.dropped).toBeUndefined();
+    expect(scored!.identity).toBe(true);
+    expect(scored!.reasons).toContain('arc match');
+  });
+
+  it('leaves a generic release for the timeline to place', async () => {
+    const target = { ...(await parseRelease('')), season: 4, episode: 1 };
+    const [scored] = scoreAll(
+      [await candidate('Demon.Slayer.Kimetsu.no.Yaiba.S04E01.1080p.WEB-DL')],
+      target, {}, opts,
+    );
+    expect(scored!.dropped).toBeUndefined();
+    expect(scored!.identity).toBeFalsy();
+  });
+
+  it('keeps a release that names the requested arc even if it also mentions another', async () => {
+    const target = { ...(await parseRelease('')), season: 4, episode: 1 };
+    const [scored] = scoreAll(
+      [await candidate('Katanakaji no Sato-hen 01 (recap of Yuukaku-hen)')],
+      target, {}, opts,
+    );
+    expect(scored!.dropped).toBeUndefined();
+  });
+});

@@ -22,7 +22,8 @@ import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { runPipeline, type RequestIdentity } from './pipeline.js';
 import { episodeTitleFor, parseSeriesId } from './meta/episode.js';
-import { hasTitleBearingSub } from './score/score.js';
+import { arcKeywords, foreignArcKeywords } from './meta/arcs.js';
+import { hasArcBearingSub, hasTitleBearingSub } from './score/score.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
 import type { RequestExtras } from './types.js';
@@ -225,19 +226,28 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
       let identity: RequestIdentity = {};
       if (sid) {
         const episodeTitle = await episodeTitleFor(sid.imdbId, sid.season, sid.episode);
+        const arc = arcKeywords(sid.imdbId, sid.season);
+        const foreign = foreignArcKeywords(sid.imdbId, sid.season);
         identity = {
           season: sid.season,
           episode: sid.episode,
           ...(episodeTitle !== undefined ? { episodeTitle } : {}),
+          ...(arc.length > 0 ? { arcKeywords: arc } : {}),
+          ...(foreign.length > 0 ? { foreignArcKeywords: foreign } : {}),
         };
 
-        // When the requested episode has an authoritative title but nothing in
-        // this season's results carries it, the correct arc is almost certainly
-        // filed under a neighbouring season number — anime arcs drift by a
-        // season between the IMDb/Cinemeta and Crunchyroll numberings. Fetch the
-        // adjacent seasons' same episode so the title-bearing anchor is in the
-        // pool; the pipeline then anchors the correct arc and penalises the rest.
-        if (episodeTitle && !hasTitleBearingSub(subs, episodeTitle)) {
+        // We can anchor the correct arc when we know this episode's title or its
+        // arc keywords. If we can but nothing in this season's own results
+        // carries either, the correct arc is almost certainly filed under a
+        // neighbouring season number — anime arcs drift by a season between the
+        // IMDb/Cinemeta and Crunchyroll numberings. Fetch the adjacent seasons'
+        // same episode so the anchor is in the pool; the pipeline then pins the
+        // correct arc, drops subtitles that name a different arc, and lets the
+        // timeline place the rest.
+        const canAnchor = episodeTitle !== undefined || arc.length > 0;
+        const haveAnchor =
+          hasTitleBearingSub(subs, episodeTitle) || hasArcBearingSub(subs, arc);
+        if (canAnchor && !haveAnchor) {
           const neighbours = [sid.season - 1, sid.season + 1].filter((s) => s >= 1);
           const extra = await Promise.all(
             neighbours.map((s) =>

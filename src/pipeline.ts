@@ -236,6 +236,10 @@ export interface RequestIdentity {
   season?: number;
   episode?: number;
   episodeTitle?: string;
+  /** Keywords naming the requested arc (anime filed across season numbers). */
+  arcKeywords?: string[];
+  /** Keywords naming a different arc of the same anime. */
+  foreignArcKeywords?: string[];
 }
 
 export async function runPipeline(
@@ -256,6 +260,8 @@ export async function runPipeline(
     preferSubbed: true,
     dropMismatches: config.dropMismatches,
     ...(identity.episodeTitle !== undefined ? { episodeTitle: identity.episodeTitle } : {}),
+    ...(identity.arcKeywords ? { arcKeywords: identity.arcKeywords } : {}),
+    ...(identity.foreignArcKeywords ? { foreignArcKeywords: identity.foreignArcKeywords } : {}),
   });
 
   let ordered = rank(scored);

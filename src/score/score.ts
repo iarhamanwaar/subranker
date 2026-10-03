@@ -77,6 +77,28 @@ export function hasTitleBearingSub(subs: RawSubtitle[], episodeTitle: string | u
 }
 
 /**
+ * Shortest arc keyword worth matching. Lower than the episode-title floor
+ * because arc names are curated and distinctive — "yuukaku" (遊郭) or "satohen"
+ * will not appear by accident, whereas a 4-letter fragment might.
+ */
+const MIN_ARC_LENGTH = 6;
+
+/** Whether any of the names carries one of the keywords (punctuation ignored). */
+function matchesAnyKeyword(names: string[], keywords: string[] | undefined): boolean {
+  if (!keywords || keywords.length === 0) return false;
+  const haystacks = names.map(normalise);
+  return keywords.some((k) => {
+    const needle = normalise(k);
+    return needle.length >= MIN_ARC_LENGTH && haystacks.some((h) => h.includes(needle));
+  });
+}
+
+/** Whether any subtitle's name carries one of the requested arc's keywords. */
+export function hasArcBearingSub(subs: RawSubtitle[], arcKeywords: string[] | undefined): boolean {
+  return subs.some((s) => matchesAnyKeyword(subtitleNames(s), arcKeywords));
+}
+
+/**
  * Maximum bonus awarded for agreeing with the consensus timeline.
  *
  * This is the fallback evidence when the release name carries no group. Players
@@ -103,6 +125,10 @@ export interface ScoreOptions {
   dropMismatches: boolean;
   /** The requested episode's authoritative title, when it could be resolved. */
   episodeTitle?: string;
+  /** Keywords that name the requested arc (anime filed across season numbers). */
+  arcKeywords?: string[];
+  /** Keywords that name a *different* arc of the same anime. */
+  foreignArcKeywords?: string[];
 }
 
 export const DEFAULT_SCORE_OPTIONS: ScoreOptions = {
@@ -162,10 +188,24 @@ export function scoreCandidate(
   // episode title only in the filename while releaseName holds the series name,
   // and a title match in any one field (or any language) is enough to anchor on.
   const names = [...subtitleNames(candidate.raw), candidate.releaseText];
-  const identity = names.some((n) => matchesEpisodeTitle(n, options.episodeTitle));
+
+  // Arc identity, for anime filed across conflicting season numbers. A release
+  // that names a *different* arc of this anime is the wrong episode whatever
+  // season it claims, so drop it; one that names the requested arc is
+  // authoritatively this arc and anchors it, exactly like an episode-title
+  // match. A release naming neither (a generic "S04E01") is left to the title
+  // anchor and the consensus timeline to place.
+  const inRequestedArc = matchesAnyKeyword(names, options.arcKeywords);
+  const inForeignArc = matchesAnyKeyword(names, options.foreignArcKeywords);
+  if (inForeignArc && !inRequestedArc && options.dropMismatches) {
+    return { score: -1, reasons: ['wrong arc'], dropped: 'wrong arc' };
+  }
+
+  const titleMatch = names.some((n) => matchesEpisodeTitle(n, options.episodeTitle));
+  const identity = titleMatch || inRequestedArc;
   if (identity) {
     score += IDENTITY_WEIGHT;
-    reasons.push('episode match');
+    reasons.push(titleMatch ? 'episode match' : 'arc match');
   }
 
   // No penalty for a stated season that differs from the requested one. Anime
