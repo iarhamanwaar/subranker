@@ -29,6 +29,10 @@ export interface Config {
   relabel: boolean;
   /** Remove clear mismatches instead of ranking them low. */
   dropMismatches: boolean;
+  /** Accepted language codes for the preferred subtitle language. */
+  langPref: string[];
+  /** Drop non-preferred languages instead of demoting them. */
+  dropOtherLangs: boolean;
   /** Download top candidates to check they are alive and in sync. */
   verify: boolean;
   /** How many candidates to download per request. */
@@ -108,6 +112,20 @@ export interface Config {
   watchOrderBuilder: 'internal' | 'external';
 }
 
+/**
+ * Expand a language preference into every code a provider might use. Stremio
+ * and OpenSubtitles report 3-letter codes ('eng'); users write 'en'.
+ */
+function expandLangs(tokens: string[]): string[] {
+  const aliases: Record<string, string[]> = {
+    en: ['en', 'eng', 'english'],
+    eng: ['en', 'eng', 'english'],
+  };
+  const out = new Set<string>();
+  for (const t of tokens) for (const code of aliases[t] ?? [t]) out.add(code);
+  return [...out];
+}
+
 function bool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
   return /^(1|true|yes|on)$/i.test(value);
@@ -141,6 +159,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     upstreamBases,
     relabel: bool(env.RELABEL, true),
     dropMismatches: bool(env.DROP_MISMATCHES, true),
+    langPref: expandLangs((env.LANG_PREF ?? 'en').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)),
+    dropOtherLangs: bool(env.DROP_OTHER_LANGS, true),
     verify: bool(env.VERIFY, true),
     verifyLimit: int(env.VERIFY_LIMIT, 25),
     verifyTimeoutMs: int(env.VERIFY_TIMEOUT_MS, 2500),

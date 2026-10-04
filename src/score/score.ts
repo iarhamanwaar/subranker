@@ -129,6 +129,24 @@ export interface ScoreOptions {
   arcKeywords?: string[];
   /** Keywords that name a *different* arc of the same anime. */
   foreignArcKeywords?: string[];
+  /** Accepted language codes for the preferred language, e.g. ['en','eng']. */
+  langPref?: string[];
+  /** Drop non-preferred languages instead of demoting them. Default true. */
+  dropOtherLangs?: boolean;
+}
+
+/**
+ * Dominates every other weight, so a non-preferred language sinks below every
+ * preferred one even when it matches the release exactly. Used only in demote
+ * mode; in the default drop mode the candidate is removed outright.
+ */
+export const OTHER_LANG_PENALTY = 100_000;
+
+/** True when `lang` is one of the accepted preferred codes (or no preference). */
+export function langMatches(lang: string | undefined, pref: string[] | undefined): boolean {
+  if (!pref || pref.length === 0) return true;
+  const l = (lang ?? '').toLowerCase();
+  return pref.some((p) => l === p.toLowerCase());
 }
 
 export const DEFAULT_SCORE_OPTIONS: ScoreOptions = {
@@ -161,6 +179,17 @@ export function scoreCandidate(
   let score = 0;
 
   // --- disqualifications -------------------------------------------------
+
+  // Wrong language. The user wants one language; everything else is noise. By
+  // default drop it so the row is that language only; in demote mode keep it
+  // as a last resort but sink it below every preferred-language candidate.
+  if (options.langPref && !langMatches(candidate.raw.lang, options.langPref)) {
+    if (options.dropOtherLangs ?? true) {
+      return { score: -1, reasons: ['other language'], dropped: 'other language' };
+    }
+    score -= OTHER_LANG_PENALTY;
+    reasons.push('other language');
+  }
 
   // A dub-timed track is not a taste mismatch but a sync failure: a dub is a
   // different vocal performance, so its cues drift against the original audio.

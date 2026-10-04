@@ -223,3 +223,37 @@ describe('arc-aware filtering', () => {
     expect(scored!.dropped).toBeUndefined();
   });
 });
+
+describe('language preference', () => {
+  const TARGET = 'Demon Slayer - Kimetsu no Yaiba - S01E01 - Cruelty Bluray-1080p.mkv';
+
+  it('drops non-preferred languages by default (English-only list)', async () => {
+    const target = await parseRelease(TARGET);
+    const cands = [
+      await candidate('[Erai-raws] Kimetsu no Yaiba-01-1080p', { lang: 'fre' }),
+      await candidate('Demon.Slayer.S01E01.WEBRip', { lang: 'eng' }),
+    ];
+    const ranked = rank(scoreAll(cands, target, {}, { ...DEFAULT_SCORE_OPTIONS, langPref: ['en', 'eng'] }));
+    expect(ranked.map((c) => c.raw.lang)).toEqual(['eng']);
+  });
+
+  it('floats English above a better-matched non-English when kept (demote mode)', async () => {
+    const target = await parseRelease('[Erai-raws] Kimetsu no Yaiba-01-1080p.mkv');
+    const cands = [
+      await candidate('[Erai-raws] Kimetsu no Yaiba-01-1080p', { lang: 'fre' }),
+      await candidate('Demon.Slayer.S01E01.WEBRip', { lang: 'eng' }),
+    ];
+    const ranked = rank(
+      scoreAll(cands, target, {}, { ...DEFAULT_SCORE_OPTIONS, langPref: ['en', 'eng'], dropOtherLangs: false }),
+    );
+    expect(ranked[0]?.raw.lang).toBe('eng');
+    expect(ranked.map((c) => c.raw.lang)).toContain('fre');
+  });
+
+  it('is a no-op when langPref is unset (back-compat)', async () => {
+    const target = await parseRelease(TARGET);
+    const cands = [await candidate('whatever', { lang: 'fre' })];
+    const ranked = rank(scoreAll(cands, target, {}));
+    expect(ranked).toHaveLength(1);
+  });
+});
