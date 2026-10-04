@@ -71,7 +71,7 @@ describe('downloadFile', () => {
     const fetchImpl = vi.fn(async (url: string) => {
       calls.push(url);
       if (url.endsWith('/download')) return { ok: true, json: async () => ({ link: 'https://dl.example/x.srt' }) };
-      return { ok: true, text: async () => 'WEBVTT\n\n1\n00:00:01,000 --> 00:00:02,000\nHi' };
+      return { ok: true, headers: new Headers(), text: async () => 'WEBVTT\n\n1\n00:00:01,000 --> 00:00:02,000\nHi' };
     }) as unknown as typeof fetch;
     const text = await downloadFile({ apiKey: 'K', fileId: '555', fetchImpl });
     expect(text).toContain('Hi');

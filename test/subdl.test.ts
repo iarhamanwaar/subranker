@@ -57,7 +57,7 @@ describe('searchSubdl', () => {
 describe('downloadSubdl', () => {
   it('fetches the zip and extracts the subtitle', async () => {
     const zip = zipSync({ 'x.srt': strToU8('cue content here') });
-    const fetchImpl = vi.fn(async () => ({ ok: true, arrayBuffer: async () => zip.buffer })) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(async () => ({ ok: true, headers: new Headers(), arrayBuffer: async () => zip.buffer })) as unknown as typeof fetch;
     const text = await downloadSubdl({ apiKey: 'K', zipId: '1-2', fetchImpl });
     expect(text).toContain('cue content here');
   });
