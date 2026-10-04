@@ -113,5 +113,12 @@ export async function downloadFile(opts: {
   if (!link) throw new Error('OpenSubtitles download: no link');
   const file = await doFetch(link, { signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000) });
   if (!file.ok) throw new Error(`OpenSubtitles file HTTP ${file.status}`);
-  return file.text();
+  // Bound the subtitle size before/after reading, like the SubDL path.
+  const MAX_SUB = 5_000_000;
+  if (Number(file.headers.get('content-length') ?? 0) > MAX_SUB) {
+    throw new Error('OpenSubtitles file too large');
+  }
+  const text = await file.text();
+  if (text.length > MAX_SUB) throw new Error('OpenSubtitles file too large');
+  return text;
 }

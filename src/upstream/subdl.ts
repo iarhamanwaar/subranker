@@ -117,8 +117,12 @@ export async function downloadSubdl(opts: {
   const url = `${DL}/subtitle/${opts.zipId}.zip?api_key=${encodeURIComponent(opts.apiKey)}`;
   const res = await doFetch(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000) });
   if (!res.ok) throw new Error(`SubDL download HTTP ${res.status}`);
+  // Reject by the declared size BEFORE reading the body into memory; a subtitle
+  // zip is tiny. The post-read check backstops a missing or lying header.
+  const MAX_ZIP = 10_000_000;
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared > MAX_ZIP) throw new Error('SubDL zip too large');
   const buf = new Uint8Array(await res.arrayBuffer());
-  // A subtitle zip is tiny; refuse an oversized download before decompressing.
-  if (buf.byteLength > 10_000_000) throw new Error('SubDL zip too large');
+  if (buf.byteLength > MAX_ZIP) throw new Error('SubDL zip too large');
   return extractSrt(buf);
 }
