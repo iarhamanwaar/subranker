@@ -87,6 +87,8 @@ export interface Config {
    */
   demoteForced: boolean;
   addonName: string;
+  /** OpenSubtitles official API key, for hash-first exact-match search. */
+  opensubtitlesApiKey?: string;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
    * of real results, so you can see which formats your client actually
@@ -174,6 +176,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     fixOverlaps: bool(env.FIX_OVERLAPS, true),
     demoteForced: bool(env.DEMOTE_FORCED, true),
     addonName: env.ADDON_NAME ?? 'SubRanker',
+    ...(env.OPENSUBTITLES_API_KEY ? { opensubtitlesApiKey: env.OPENSUBTITLES_API_KEY } : {}),
     probeLabels: bool(env.PROBE_LABELS, false),
     watchOrder: bool(env.WATCH_ORDER, false),
     watchOrderDir: env.WATCH_ORDER_DIR ?? './data/watch-order',

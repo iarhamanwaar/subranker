@@ -26,6 +26,7 @@ import { arcKeywords, foreignArcKeywords } from './meta/arcs.js';
 import { hasArcBearingSub, hasTitleBearingSub } from './score/score.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
+import { downloadFile, searchByHash } from './upstream/opensubtitles.js';
 import type { RequestExtras } from './types.js';
 import { WatchOrderStore } from './watchorder/store.js';
 import { startScheduler } from './watchorder/scheduler.js';
@@ -133,6 +134,10 @@ function cacheFingerprint(c: Config): string {
  */
 export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } = {}) {
   const cache = new Map<string, CacheEntry>();
+  // Downloaded OpenSubtitles files, keyed by file id, so verify + shift + play
+  // of one subtitle cost a single download against the daily quota.
+  const osCache = new Map<string, { at: number; body: string }>();
+  const OS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
@@ -162,6 +167,35 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     }
 
     if (deps.watchOrder?.handleImage(req, res, pathname)) return;
+
+    // OpenSubtitles download proxy. The search result points here so a download
+    // is spent only on fetch (verification or playback), and the cache collapses
+    // the verify + shift + play hits on one file to a single real download.
+    const os = pathname.match(/^\/os\/(\d+)\.srt$/);
+    if (os) {
+      const apiKey = base.opensubtitlesApiKey;
+      const fileId = os[1]!;
+      if (!apiKey) return send(res, 404, JSON.stringify({ err: 'not found' }));
+      const cached = osCache.get(fileId);
+      let body: string;
+      if (cached && Date.now() - cached.at < OS_CACHE_TTL_MS) {
+        body = cached.body;
+      } else {
+        try {
+          body = await downloadFile({ apiKey, fileId });
+          osCache.set(fileId, { at: Date.now(), body });
+        } catch {
+          return send(res, 502, JSON.stringify({ err: 'opensubtitles download failed' }));
+        }
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(body);
+      return;
+    }
 
     // Checked before route parsing: a shift path carries base64 segments of
     // its own, which must not be mistaken for a config segment.
@@ -210,6 +244,20 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     try {
       const merged = await fetchForRequest(config.upstreamBases, route.rest);
       let subs = merged.subtitles;
+
+      // Hash-first exact match: when we have the file's moviehash and a key,
+      // ask the official API for the subtitle cut for this exact file. These
+      // carry moviehash:true, so HASH_WEIGHT floats them above every id-only
+      // result from the keyless upstream.
+      if (config.opensubtitlesApiKey && parsed.extras.videoHash && config.publicUrl) {
+        const hashSubs = await searchByHash({
+          apiKey: config.opensubtitlesApiKey,
+          hash: parsed.extras.videoHash,
+          langs: config.langPref,
+          proxyBase: config.publicUrl,
+        });
+        subs = [...hashSubs, ...subs];
+      }
 
       if (config.probeLabels) {
         return send(res, 200, JSON.stringify({ subtitles: buildProbeSubtitles(subs[0]) }));
