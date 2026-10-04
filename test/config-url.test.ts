@@ -17,6 +17,7 @@ const BASE: Config = {
   langPref: ['en', 'eng', 'english'],
   dropOtherLangs: true,
   osDownloadBudget: 90,
+  subdlDownloadBudget: 45,
   verify: true,
   verifyLimit: 25,
   verifyTimeoutMs: 2500,

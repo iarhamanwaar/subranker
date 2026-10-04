@@ -27,6 +27,7 @@ import { hasArcBearingSub, hasTitleBearingSub } from './score/score.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
 import { downloadFile, searchByHash } from './upstream/opensubtitles.js';
+import { downloadSubdl, searchSubdl } from './upstream/subdl.js';
 import type { RequestExtras } from './types.js';
 import { WatchOrderStore } from './watchorder/store.js';
 import { startScheduler } from './watchorder/scheduler.js';
@@ -150,6 +151,16 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     if (osDownloads.day !== today) osDownloads = { day: today, count: 0 };
     return osDownloads.count < base.osDownloadBudget;
   };
+  // SubDL — the anime-correct source — mirrors the OpenSubtitles proxy: its
+  // zip downloads are quota-limited, so same vouch + daily cap + cache.
+  const subdlCache = new Map<string, { at: number; body: string }>();
+  const subdlVouched = new Map<string, number>();
+  let subdlDownloads = { day: '', count: 0 };
+  const subdlBudgetLeft = (): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (subdlDownloads.day !== today) subdlDownloads = { day: today, count: 0 };
+    return subdlDownloads.count < base.subdlDownloadBudget;
+  };
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
@@ -222,6 +233,39 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         } catch {
           osDownloads.count -= 1;
           return send(res, 502, JSON.stringify({ err: 'opensubtitles download failed' }));
+        }
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.end(body);
+      return;
+    }
+
+    // SubDL download proxy — same gating as /os (vouched ids + daily cap).
+    const sd = pathname.match(/^\/subdl\/([\w-]+)\.srt$/);
+    if (sd) {
+      const apiKey = base.subdlApiKey;
+      const zipId = sd[1]!;
+      if (!apiKey) return send(res, 404, JSON.stringify({ err: 'not found' }));
+      const cached = subdlCache.get(zipId);
+      let body: string;
+      if (cached && Date.now() - cached.at < OS_CACHE_TTL_MS) {
+        body = cached.body;
+      } else {
+        const vouch = subdlVouched.get(zipId);
+        if (!vouch || vouch < Date.now()) return send(res, 404, JSON.stringify({ err: 'not found' }));
+        if (!subdlBudgetLeft()) return send(res, 429, JSON.stringify({ err: 'daily download budget reached' }));
+        subdlDownloads.count += 1;
+        try {
+          body = await downloadSubdl({ apiKey, zipId });
+          subdlCache.set(zipId, { at: Date.now(), body });
+          capMap(subdlCache, MAX_OS_ENTRIES);
+        } catch {
+          subdlDownloads.count -= 1;
+          return send(res, 502, JSON.stringify({ err: 'subdl download failed' }));
         }
       }
       res.writeHead(200, {
@@ -314,6 +358,28 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         const rm = /^\/subtitles\/[^/]+\/([^/]+?)(?:\/.+)?\.json$/.exec(merged.resolvedPath);
         if (rm) sid = parseSeriesId(decodeURIComponent(rm[1]!));
       }
+
+      // SubDL carries the correct arc release name ("Swordsmith Village Arc
+      // Ep04") where OpenSubtitles' IMDb-season bucket is polluted with the
+      // wrong arc, so add it to the pool for the right episode to win.
+      if (config.subdlApiKey && config.publicUrl && sid) {
+        const sdSubs = await searchSubdl({
+          apiKey: config.subdlApiKey,
+          imdbId: sid.imdbId,
+          season: sid.season,
+          episode: sid.episode,
+          langs: config.langPref,
+          proxyBase: config.publicUrl,
+        });
+        const now = Date.now();
+        for (const s of sdSubs) {
+          const m = s.url.match(/\/subdl\/([\w-]+)\.srt$/);
+          if (m) subdlVouched.set(m[1]!, now + VOUCH_TTL_MS);
+        }
+        capMap(subdlVouched, MAX_OS_ENTRIES);
+        subs = [...sdSubs, ...subs];
+      }
+
       let identity: RequestIdentity = {};
       if (sid) {
         const episodeTitle = await episodeTitleFor(sid.imdbId, sid.season, sid.episode);

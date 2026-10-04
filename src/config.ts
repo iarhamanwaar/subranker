@@ -91,6 +91,10 @@ export interface Config {
   opensubtitlesApiKey?: string;
   /** Hard cap on OpenSubtitles downloads per day (protects the paid quota). */
   osDownloadBudget: number;
+  /** SubDL API key, the anime-correct subtitle source. */
+  subdlApiKey?: string;
+  /** Hard cap on SubDL downloads per day (free tier is ~50/day). */
+  subdlDownloadBudget: number;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
    * of real results, so you can see which formats your client actually
@@ -180,6 +184,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     addonName: env.ADDON_NAME ?? 'SubRanker',
     ...(env.OPENSUBTITLES_API_KEY ? { opensubtitlesApiKey: env.OPENSUBTITLES_API_KEY } : {}),
     osDownloadBudget: int(env.OS_DOWNLOAD_BUDGET, 90),
+    ...(env.SUBDL_API_KEY ? { subdlApiKey: env.SUBDL_API_KEY } : {}),
+    subdlDownloadBudget: int(env.SUBDL_DOWNLOAD_BUDGET, 45),
     probeLabels: bool(env.PROBE_LABELS, false),
     watchOrder: bool(env.WATCH_ORDER, false),
     watchOrderDir: env.WATCH_ORDER_DIR ?? './data/watch-order',
