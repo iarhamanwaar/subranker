@@ -37,4 +37,15 @@ describe('/os download proxy security', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  it('404s a SubDL id never surfaced by a search, with no-store', async () => {
+    await withServer(
+      { UPSTREAM_BASE: 'https://example.invalid', SUBDL_API_KEY: 'k', PUBLIC_URL: 'https://subs.example' },
+      async (base) => {
+        const res = await fetch(`${base}/subdl/9-9.srt`);
+        expect(res.status).toBe(404);
+        expect(res.headers.get('cache-control')).toBe('no-store');
+      },
+    );
+  });
 });
