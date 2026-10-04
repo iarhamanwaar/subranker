@@ -3,7 +3,7 @@
  * correct answer, from signals that need no video — the top result's language,
  * its runtime (last cue vs a single-episode band), and its cue count.
  */
-import type { Check, Fixture } from './types.js';
+import type { Check, Fixture, OracleResult } from './types.js';
 
 const DEFAULT_MIN = 300; // 5 min
 
@@ -34,4 +34,24 @@ export function languageCheck(topLang: string | undefined, fx: Fixture): Check {
     status: ok ? 'pass' : 'fail',
     detail: `top lang ${topLang ?? '(none)'}, expected ${fx.lang}`,
   };
+}
+
+const MIN_CUES = 50;
+
+export function cueSanityCheck(timeline: number[], min = MIN_CUES): Check {
+  const ok = timeline.length >= min;
+  return {
+    name: 'cue-count',
+    status: ok ? 'pass' : 'fail',
+    detail: `${timeline.length} cues, expected >= ${min}`,
+  };
+}
+
+export function judge(fx: Fixture, topLang: string | undefined, timeline: number[]): OracleResult {
+  const checks: Check[] = [
+    languageCheck(topLang, fx),
+    runtimeCheck(timeline, fx),
+    cueSanityCheck(timeline),
+  ];
+  return { pass: checks.every((c) => c.status === 'pass'), checks };
 }
