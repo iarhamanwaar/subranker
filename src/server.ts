@@ -155,10 +155,24 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     res.writeHead(status, {
       'Content-Type': `${type}; charset=utf-8`,
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, max-age=300',
+      // Never let an error be cached publicly: a transient upstream failure
+      // would otherwise poison shared caches for every viewer.
+      'Cache-Control': status >= 400 ? 'no-store' : 'public, max-age=300',
     });
     res.end(body);
   };
+
+  // Keep the in-memory maps from growing without bound (a request with a novel
+  // hash adds entries): evict the oldest once over cap. Maps iterate in
+  // insertion order, so the first key is the oldest.
+  const capMap = <V>(m: Map<string, V>, max: number) => {
+    while (m.size > max) {
+      const oldest = m.keys().next().value;
+      if (oldest === undefined) break;
+      m.delete(oldest);
+    }
+  };
+  const MAX_OS_ENTRIES = 500;
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -198,11 +212,15 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
         const vouch = vouchedFiles.get(fileId);
         if (!vouch || vouch < Date.now()) return send(res, 404, JSON.stringify({ err: 'not found' }));
         if (!downloadBudgetLeft()) return send(res, 429, JSON.stringify({ err: 'daily download budget reached' }));
+        // Reserve the budget slot BEFORE the await, or concurrent requests all
+        // pass the check and blow past the cap; release it if the download fails.
+        osDownloads.count += 1;
         try {
           body = await downloadFile({ apiKey, fileId });
-          osDownloads.count += 1;
           osCache.set(fileId, { at: Date.now(), body });
+          capMap(osCache, MAX_OS_ENTRIES);
         } catch {
+          osDownloads.count -= 1;
           return send(res, 502, JSON.stringify({ err: 'opensubtitles download failed' }));
         }
       }
@@ -280,6 +298,7 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
           const m = s.url.match(/\/os\/(\d+)\.srt$/);
           if (m) vouchedFiles.set(m[1]!, now + VOUCH_TTL_MS);
         }
+        capMap(vouchedFiles, MAX_OS_ENTRIES);
         subs = [...hashSubs, ...subs];
       }
 

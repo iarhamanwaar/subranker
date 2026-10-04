@@ -25,6 +25,8 @@ describe('/os download proxy security', () => {
       async (base) => {
         const res = await fetch(`${base}/os/999999.srt`);
         expect(res.status).toBe(404);
+        // The error must not be publicly cacheable (no cache poisoning).
+        expect(res.headers.get('cache-control')).toBe('no-store');
       },
     );
   });
