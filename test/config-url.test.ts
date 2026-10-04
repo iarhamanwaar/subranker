@@ -14,6 +14,8 @@ const BASE: Config = {
   upstreamBases: ['https://default.example'],
   relabel: false,
   dropMismatches: true,
+  langPref: ['en', 'eng', 'english'],
+  dropOtherLangs: true,
   verify: true,
   verifyLimit: 25,
   verifyTimeoutMs: 2500,

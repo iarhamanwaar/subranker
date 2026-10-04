@@ -259,6 +259,8 @@ export async function runPipeline(
   const scored = scoreAll(candidates, target, extras, {
     preferSubbed: true,
     dropMismatches: config.dropMismatches,
+    dropOtherLangs: config.dropOtherLangs,
+    ...(config.langPref.length ? { langPref: config.langPref } : {}),
     ...(identity.episodeTitle !== undefined ? { episodeTitle: identity.episodeTitle } : {}),
     ...(identity.arcKeywords ? { arcKeywords: identity.arcKeywords } : {}),
     ...(identity.foreignArcKeywords ? { foreignArcKeywords: identity.foreignArcKeywords } : {}),
