@@ -138,6 +138,18 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
   // of one subtitle cost a single download against the daily quota.
   const osCache = new Map<string, { at: number; body: string }>();
   const OS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+  // Only file ids this instance surfaced in a recent search may be downloaded,
+  // so the public /os route cannot be used as a general OpenSubtitles proxy for
+  // arbitrary ids on our key. Plus a hard daily cap on actual downloads, so the
+  // paid quota cannot be drained even within the vouched set.
+  const vouchedFiles = new Map<string, number>(); // file id -> expiry (ms)
+  const VOUCH_TTL_MS = 60 * 60 * 1000;
+  let osDownloads = { day: '', count: 0 };
+  const downloadBudgetLeft = (): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (osDownloads.day !== today) osDownloads = { day: today, count: 0 };
+    return osDownloads.count < base.osDownloadBudget;
+  };
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
@@ -181,8 +193,14 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
       if (cached && Date.now() - cached.at < OS_CACHE_TTL_MS) {
         body = cached.body;
       } else {
+        // Refuse ids this instance never surfaced: the route is public and
+        // spends a paid quota, so it serves only our own search results.
+        const vouch = vouchedFiles.get(fileId);
+        if (!vouch || vouch < Date.now()) return send(res, 404, JSON.stringify({ err: 'not found' }));
+        if (!downloadBudgetLeft()) return send(res, 429, JSON.stringify({ err: 'daily download budget reached' }));
         try {
           body = await downloadFile({ apiKey, fileId });
+          osDownloads.count += 1;
           osCache.set(fileId, { at: Date.now(), body });
         } catch {
           return send(res, 502, JSON.stringify({ err: 'opensubtitles download failed' }));
@@ -256,6 +274,12 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
           langs: config.langPref,
           proxyBase: config.publicUrl,
         });
+        // Vouch these file ids so their /os downloads are permitted.
+        const now = Date.now();
+        for (const s of hashSubs) {
+          const m = s.url.match(/\/os\/(\d+)\.srt$/);
+          if (m) vouchedFiles.set(m[1]!, now + VOUCH_TTL_MS);
+        }
         subs = [...hashSubs, ...subs];
       }
 

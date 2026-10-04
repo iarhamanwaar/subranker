@@ -89,6 +89,8 @@ export interface Config {
   addonName: string;
   /** OpenSubtitles official API key, for hash-first exact-match search. */
   opensubtitlesApiKey?: string;
+  /** Hard cap on OpenSubtitles downloads per day (protects the paid quota). */
+  osDownloadBudget: number;
   /**
    * Diagnostic mode. Returns one subtitle per candidate `lang` format instead
    * of real results, so you can see which formats your client actually
@@ -177,6 +179,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     demoteForced: bool(env.DEMOTE_FORCED, true),
     addonName: env.ADDON_NAME ?? 'SubRanker',
     ...(env.OPENSUBTITLES_API_KEY ? { opensubtitlesApiKey: env.OPENSUBTITLES_API_KEY } : {}),
+    osDownloadBudget: int(env.OS_DOWNLOAD_BUDGET, 90),
     probeLabels: bool(env.PROBE_LABELS, false),
     watchOrder: bool(env.WATCH_ORDER, false),
     watchOrderDir: env.WATCH_ORDER_DIR ?? './data/watch-order',

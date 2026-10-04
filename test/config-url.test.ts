@@ -16,6 +16,7 @@ const BASE: Config = {
   dropMismatches: true,
   langPref: ['en', 'eng', 'english'],
   dropOtherLangs: true,
+  osDownloadBudget: 90,
   verify: true,
   verifyLimit: 25,
   verifyTimeoutMs: 2500,
