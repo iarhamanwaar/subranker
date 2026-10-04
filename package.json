@@ -13,6 +13,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "harness": "tsx src/harness/run.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.all.json"
   },
   "dependencies": {
