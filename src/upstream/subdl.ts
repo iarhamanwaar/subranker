@@ -63,11 +63,20 @@ export function toRawSubtitles(resp: SubdlResponse, proxyBase: string): RawSubti
   return out;
 }
 
-/** Extract the first .srt/.ass from a SubDL zip. */
+/** Largest subtitle we will decompress/serve (a real one is tens of KB). */
+const MAX_SUB_BYTES = 2_000_000;
+
+/**
+ * Extract the first subtitle from a SubDL zip. The zip is untrusted, so only
+ * subtitle files whose declared uncompressed size is bounded are decompressed
+ * — a zip bomb never gets inflated.
+ */
 export function extractSrt(zip: Uint8Array): string {
-  const files = unzipSync(zip);
+  const files = unzipSync(zip, {
+    filter: (f) => /\.(srt|ass|vtt)$/i.test(f.name) && f.originalSize <= MAX_SUB_BYTES,
+  });
   const name = Object.keys(files).find((n) => /\.(srt|ass|vtt)$/i.test(n));
-  if (!name) throw new Error('SubDL zip has no subtitle file');
+  if (!name) throw new Error('SubDL zip has no subtitle file within size limit');
   return strFromU8(files[name]!);
 }
 
@@ -108,5 +117,8 @@ export async function downloadSubdl(opts: {
   const url = `${DL}/subtitle/${opts.zipId}.zip?api_key=${encodeURIComponent(opts.apiKey)}`;
   const res = await doFetch(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000) });
   if (!res.ok) throw new Error(`SubDL download HTTP ${res.status}`);
-  return extractSrt(new Uint8Array(await res.arrayBuffer()));
+  const buf = new Uint8Array(await res.arrayBuffer());
+  // A subtitle zip is tiny; refuse an oversized download before decompressing.
+  if (buf.byteLength > 10_000_000) throw new Error('SubDL zip too large');
+  return extractSrt(buf);
 }

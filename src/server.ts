@@ -161,6 +161,15 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     if (subdlDownloads.day !== today) subdlDownloads = { day: today, count: 0 };
     return subdlDownloads.count < base.subdlDownloadBudget;
   };
+  // SubDL searches also count against the account's daily API limit, so cap
+  // them too (generously — repeats are already served from `cache`).
+  let subdlSearches = { day: '', count: 0 };
+  const SUBDL_SEARCH_CAP = 300;
+  const subdlSearchLeft = (): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (subdlSearches.day !== today) subdlSearches = { day: today, count: 0 };
+    return subdlSearches.count < SUBDL_SEARCH_CAP;
+  };
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
@@ -231,7 +240,8 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
           osCache.set(fileId, { at: Date.now(), body });
           capMap(osCache, MAX_OS_ENTRIES);
         } catch {
-          osDownloads.count -= 1;
+          // Slot stays spent: a failed attempt must still count, or repeated
+          // failures would let the daily cap be bypassed.
           return send(res, 502, JSON.stringify({ err: 'opensubtitles download failed' }));
         }
       }
@@ -264,7 +274,7 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
           subdlCache.set(zipId, { at: Date.now(), body });
           capMap(subdlCache, MAX_OS_ENTRIES);
         } catch {
-          subdlDownloads.count -= 1;
+          // Slot stays spent (see /os): failed attempts still count.
           return send(res, 502, JSON.stringify({ err: 'subdl download failed' }));
         }
       }
@@ -362,7 +372,8 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
       // SubDL carries the correct arc release name ("Swordsmith Village Arc
       // Ep04") where OpenSubtitles' IMDb-season bucket is polluted with the
       // wrong arc, so add it to the pool for the right episode to win.
-      if (config.subdlApiKey && config.publicUrl && sid) {
+      if (config.subdlApiKey && config.publicUrl && sid && subdlSearchLeft()) {
+        subdlSearches.count += 1;
         const sdSubs = await searchSubdl({
           apiKey: config.subdlApiKey,
           imdbId: sid.imdbId,
