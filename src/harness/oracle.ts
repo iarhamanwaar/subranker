@@ -18,3 +18,20 @@ export function runtimeCheck(timeline: number[], fx: Fixture): Check {
     detail: `last cue ${last.toFixed(0)}s, expected ${min}-${max}s`,
   };
 }
+
+// OpenSubtitles returns 3-letter codes (eng/fre/pob). Match on the 2- or
+// 3-letter English prefix so "en" and "eng" both pass and "fre" fails.
+const EN_CODES = new Set(['en', 'eng']);
+
+export function languageCheck(topLang: string | undefined, fx: Fixture): Check {
+  const lang = (topLang ?? '').toLowerCase();
+  const ok =
+    fx.lang.toLowerCase() === 'en'
+      ? EN_CODES.has(lang)
+      : lang.startsWith(fx.lang.toLowerCase());
+  return {
+    name: 'language',
+    status: ok ? 'pass' : 'fail',
+    detail: `top lang ${topLang ?? '(none)'}, expected ${fx.lang}`,
+  };
+}

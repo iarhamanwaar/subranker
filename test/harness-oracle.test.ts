@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runtimeCheck } from '../src/harness/oracle.js';
+import { languageCheck, runtimeCheck } from '../src/harness/oracle.js';
 import type { Fixture } from '../src/harness/types.js';
 
 const fx: Fixture = {
@@ -16,5 +16,17 @@ describe('runtimeCheck', () => {
   });
   it('fails an empty timeline', () => {
     expect(runtimeCheck([], fx).status).toBe('fail');
+  });
+});
+
+describe('languageCheck', () => {
+  it('passes when the top sub is English', () => {
+    expect(languageCheck('eng', fx).status).toBe('pass');
+  });
+  it('fails when the top sub is French (the French-above-English bug)', () => {
+    expect(languageCheck('fre', fx).status).toBe('fail');
+  });
+  it('fails when there is no top sub', () => {
+    expect(languageCheck(undefined, fx).status).toBe('fail');
   });
 });
