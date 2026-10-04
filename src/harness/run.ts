@@ -47,25 +47,36 @@ function httpDeps(base: string): Deps {
 export async function runHarness(fixtures: Fixture[], deps: Deps): Promise<HarnessReport> {
   const episodes: EpisodeReport[] = [];
   for (const fx of fixtures) {
-    const subs = await deps.fetchSubs(fx);
-    const top = subs[0];
-    let timeline: number[] = [];
-    if (top) {
-      try {
-        timeline = parseTimeline(await deps.fetchText(top.url));
-      } catch {
-        timeline = [];
+    try {
+      const subs = await deps.fetchSubs(fx);
+      const top = subs[0];
+      let timeline: number[] = [];
+      if (top) {
+        try {
+          timeline = parseTimeline(await deps.fetchText(top.url));
+        } catch {
+          timeline = [];
+        }
       }
+      const result = judge(fx, top?.lang, timeline);
+      episodes.push({
+        label: fx.label,
+        id: fx.id,
+        topLang: top?.lang,
+        topUrl: top?.url,
+        runtimeSeconds: timeline.at(-1),
+        ...result,
+      });
+    } catch (err) {
+      // A failed addon query must not abandon the rest of the run: count this
+      // fixture FAIL and continue.
+      episodes.push({
+        label: fx.label,
+        id: fx.id,
+        pass: false,
+        checks: [{ name: 'fetch', status: 'fail', detail: String(err) }],
+      });
     }
-    const result = judge(fx, top?.lang, timeline);
-    episodes.push({
-      label: fx.label,
-      id: fx.id,
-      topLang: top?.lang,
-      topUrl: top?.url,
-      runtimeSeconds: timeline.at(-1),
-      ...result,
-    });
   }
   const passed = episodes.filter((e) => e.pass).length;
   return {

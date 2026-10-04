@@ -37,4 +37,21 @@ describe('runHarness', () => {
     });
     expect(rep.passed).toBe(0);
   });
+  it('continues to the next fixture when one fetchSubs throws', async () => {
+    const second: Fixture = { ...fx, label: 'ok', id: 'tt9335498:4:5' };
+    let n = 0;
+    const rep = await runHarness([fx, second], {
+      fetchSubs: async () => {
+        n += 1;
+        if (n === 1) throw new Error('addon timeout');
+        return [{ id: '1', url: 'u', lang: 'eng' }];
+      },
+      fetchText: async () => srt,
+    });
+    expect(rep.total).toBe(2);
+    expect(rep.passed).toBe(1);
+    expect(rep.episodes[0]!.pass).toBe(false);
+    expect(rep.episodes[0]!.checks.some((c) => c.name === 'fetch' && c.status === 'fail')).toBe(true);
+    expect(rep.episodes[1]!.pass).toBe(true);
+  });
 });
