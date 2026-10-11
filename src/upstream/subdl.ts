@@ -80,12 +80,19 @@ export function extractSrt(zip: Uint8Array): string {
   return strFromU8(files[name]!);
 }
 
-/** Search SubDL by IMDb id + season/episode. Returns [] on failure. */
+/**
+ * Search SubDL by IMDb id. Returns [] on failure.
+ *
+ * With a season and episode it queries the TV bucket; omit them (a movie
+ * request carries no S:E) and it queries `type=movie` by imdb id alone, which
+ * is how a BluRay/GalaxyRG-named film subtitle enters the pool for a movie the
+ * keyless v3 upstream only has WEB-DL cuts of.
+ */
 export async function searchSubdl(opts: {
   apiKey: string;
   imdbId: string;
-  season: number;
-  episode: number;
+  season?: number;
+  episode?: number;
   langs: string[];
   proxyBase: string;
   timeoutMs?: number;
@@ -93,9 +100,11 @@ export async function searchSubdl(opts: {
 }): Promise<RawSubtitle[]> {
   const doFetch = opts.fetchImpl ?? fetch;
   const lang = opts.langs.some((l) => l === 'en' || l === 'eng' || l === 'english') ? 'EN' : (opts.langs[0] ?? 'EN').toUpperCase();
+  const isMovie = opts.season === undefined || opts.episode === undefined;
   const url =
     `${API}?api_key=${encodeURIComponent(opts.apiKey)}&imdb_id=${encodeURIComponent(opts.imdbId)}` +
-    `&season_number=${opts.season}&episode_number=${opts.episode}&languages=${lang}&type=tv`;
+    (isMovie ? '' : `&season_number=${opts.season}&episode_number=${opts.episode}`) +
+    `&languages=${lang}&type=${isMovie ? 'movie' : 'tv'}`;
   try {
     const res = await doFetch(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000) });
     if (!res.ok) return [];

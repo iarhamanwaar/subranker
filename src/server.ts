@@ -21,12 +21,12 @@ import { buildManifest } from './manifest.js';
 import { logoSvg } from './logo.js';
 import { buildProbeSubtitles } from './label/probe.js';
 import { runPipeline, type RequestIdentity } from './pipeline.js';
-import { episodeTitleFor, parseSeriesId } from './meta/episode.js';
+import { episodeTitleFor, parseMovieId, parseSeriesId } from './meta/episode.js';
 import { arcKeywords, foreignArcKeywords } from './meta/arcs.js';
 import { hasArcBearingSub, hasTitleBearingSub } from './score/score.js';
 import { fetchShifted, parseShiftPath } from './shift/route.js';
 import { fetchForRequest } from './upstream/fetch.js';
-import { downloadFile, searchByHash } from './upstream/opensubtitles.js';
+import { downloadFile, searchByHash, searchByImdb } from './upstream/opensubtitles.js';
 import { downloadSubdl, searchSubdl } from './upstream/subdl.js';
 import type { RequestExtras } from './types.js';
 import { WatchOrderStore } from './watchorder/store.js';
@@ -431,6 +431,47 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
               }
             }
           }
+        }
+      }
+
+      // Movies get neither of the enrichment paths series do: the hash search
+      // needs a videoHash the client often omits, and SubDL above is gated on a
+      // series id. The keyless v3 upstream indexes only some releases of a film
+      // (for Eternals, WEB-DL only), so a BluRay/GalaxyRG video has no
+      // correctly-timed sub in the pool. Ask the keyed sources by imdb id for
+      // the title's other releases; they rank by release name, so a BluRay sub
+      // matches a BluRay target's group/source and wins.
+      const mid = !sid ? parseMovieId(parsed.id) : null;
+      if (mid && config.publicUrl) {
+        const now = Date.now();
+        if (config.opensubtitlesApiKey) {
+          const osSubs = await searchByImdb({
+            apiKey: config.opensubtitlesApiKey,
+            imdbId: mid.imdbId,
+            langs: config.langPref,
+            proxyBase: config.publicUrl,
+          });
+          for (const s of osSubs) {
+            const m = s.url.match(/\/os\/(\d+)\.srt$/);
+            if (m) vouchedFiles.set(m[1]!, now + VOUCH_TTL_MS);
+          }
+          capMap(vouchedFiles, MAX_OS_ENTRIES);
+          subs = [...osSubs, ...subs];
+        }
+        if (config.subdlApiKey && subdlSearchLeft()) {
+          subdlSearches.count += 1;
+          const sdSubs = await searchSubdl({
+            apiKey: config.subdlApiKey,
+            imdbId: mid.imdbId,
+            langs: config.langPref,
+            proxyBase: config.publicUrl,
+          });
+          for (const s of sdSubs) {
+            const m = s.url.match(/\/subdl\/([\w-]+)\.srt$/);
+            if (m) subdlVouched.set(m[1]!, now + VOUCH_TTL_MS);
+          }
+          capMap(subdlVouched, MAX_OS_ENTRIES);
+          subs = [...sdSubs, ...subs];
         }
       }
 

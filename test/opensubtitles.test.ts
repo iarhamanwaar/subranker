@@ -79,3 +79,25 @@ describe('downloadFile', () => {
     expect(calls.some((u) => u === 'https://dl.example/x.srt')).toBe(true);
   });
 });
+
+describe('searchByImdb (movie, non-hash)', () => {
+  it('queries by numeric imdb_id and returns release-ranked subs', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => SEARCH })) as unknown as typeof fetch;
+    const { searchByImdb } = await import('../src/upstream/opensubtitles.js');
+    const subs = await searchByImdb({
+      apiKey: 'K', imdbId: 'tt9032400', langs: ['en'],
+      proxyBase: 'https://subs.example', fetchImpl,
+    });
+    expect(subs).toHaveLength(2);
+    const url = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![0] as string;
+    expect(url).toContain('imdb_id=9032400'); // tt stripped, numeric only
+    expect(url).not.toContain('moviehash');
+  });
+
+  it('returns [] for an id with no digits', async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const { searchByImdb } = await import('../src/upstream/opensubtitles.js');
+    expect(await searchByImdb({ apiKey: 'K', imdbId: 'tt', langs: ['en'], proxyBase: 'https://x', fetchImpl })).toEqual([]);
+    expect((fetchImpl as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(0);
+  });
+});

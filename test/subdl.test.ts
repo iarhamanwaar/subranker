@@ -62,3 +62,19 @@ describe('downloadSubdl', () => {
     expect(text).toContain('cue content here');
   });
 });
+
+describe('searchSubdl (movie mode)', () => {
+  it('queries type=movie with no season/episode when they are omitted', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => RESP })) as unknown as typeof fetch;
+    const subs = await searchSubdl({
+      apiKey: 'K', imdbId: 'tt9032400',
+      langs: ['en'], proxyBase: 'https://subs.example', fetchImpl,
+    });
+    expect(subs).toHaveLength(1);
+    const url = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![0] as string;
+    expect(url).toContain('imdb_id=tt9032400');
+    expect(url).toContain('type=movie');
+    expect(url).not.toContain('season_number');
+    expect(url).not.toContain('episode_number');
+  });
+});

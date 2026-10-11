@@ -84,6 +84,11 @@ export function parseSeriesId(id: string): { imdbId: string; season: number; epi
   return { imdbId: m[1]!, season: Number(m[2]), episode: Number(m[3]) };
 }
 
+/** A bare movie id, e.g. `tt9032400` (no season/episode suffix), else null. */
+export function parseMovieId(id: string): { imdbId: string } | null {
+  return /^tt\d+$/.test(id) ? { imdbId: id } : null;
+}
+
 /** Test hook. */
 export function clearEpisodeCache(): void {
   cache.clear();

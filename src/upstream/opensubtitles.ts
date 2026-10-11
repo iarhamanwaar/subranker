@@ -89,6 +89,44 @@ export async function searchByHash(opts: {
   }
 }
 
+/**
+ * Search by IMDb id (no hash). Returns [] without digits in the id or on
+ * failure.
+ *
+ * The keyless v3 upstream only indexes some releases of a film — for Eternals
+ * it carries WEB-DL cuts only, so a BluRay/GalaxyRG video has no correctly-timed
+ * sub in the pool. This asks the official API for every release of the title by
+ * id. These are not hash matches, so they rank by release name like any other
+ * candidate: a BluRay-named result then matches a BluRay target's group/source.
+ * Searching is quota-free; a download is spent only if one is actually fetched.
+ */
+export async function searchByImdb(opts: {
+  apiKey: string;
+  imdbId: string;
+  langs: string[];
+  proxyBase: string;
+  timeoutMs?: number;
+  fetchImpl?: FetchImpl;
+}): Promise<RawSubtitle[]> {
+  // The API wants the numeric id; `tt9032400` → `9032400`.
+  const num = opts.imdbId.replace(/\D/g, '');
+  if (!num) return [];
+  const doFetch = opts.fetchImpl ?? fetch;
+  const lang = opts.langs.some((l) => l === 'en' || l === 'eng' || l === 'english') ? 'en' : (opts.langs[0] ?? 'en');
+  const url = `${API}/subtitles?${query({ imdb_id: num, languages: lang, type: 'movie' })}`;
+  try {
+    const res = await doFetch(url, {
+      headers: { 'Api-Key': opts.apiKey, 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as OsSearchResponse;
+    return toRawSubtitles(data, opts.proxyBase);
+  } catch {
+    return [];
+  }
+}
+
 /** Resolve a file id to its subtitle text (spends one download from the quota). */
 export async function downloadFile(opts: {
   apiKey: string;
