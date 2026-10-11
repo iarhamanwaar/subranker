@@ -40,6 +40,13 @@ export const SDH_PENALTY = 25;
 export const MISMATCH_PENALTIES = {
   source: 16,
   resolution: 8,
+  // A stated codec that disagrees is real evidence of a different encode, and
+  // different encodes of the same film routinely carry different cuts (an x265
+  // BluRay that keeps the studio logos vs an x264 BluRay that trims them sit a
+  // minute apart). Only a bonus was ever awarded on a match, so an x265 sub and
+  // an x264 sub scored identically against an x264 target; the disagreement must
+  // cost something or the wrong-encode cut can win on other signals.
+  videoCodec: 6,
 } as const;
 
 /**
@@ -272,8 +279,12 @@ export function scoreCandidate(
       score -= MISMATCH_PENALTIES.resolution;
     }
   }
-  if (target.videoCodec && p.videoCodec && target.videoCodec === p.videoCodec) {
-    score += WEIGHTS.videoCodec * boost;
+  if (target.videoCodec && p.videoCodec) {
+    if (target.videoCodec === p.videoCodec) {
+      score += WEIGHTS.videoCodec * boost;
+    } else {
+      score -= MISMATCH_PENALTIES.videoCodec;
+    }
   }
   if (target.episode !== undefined && p.episode === target.episode) {
     score += WEIGHTS.episode;
@@ -291,6 +302,33 @@ export function scoreCandidate(
   if (p.sdh) reasons.push('SDH');
 
   return { score, reasons, identity };
+}
+
+/**
+ * How well a parsed release matches the target on its *encode* attributes
+ * alone — group, source, codec, resolution, year — as a single number.
+ *
+ * This is the release half of `scoreCandidate` with language, timing, SDH and
+ * the no-group redistribution stripped out, so it can rate a *timing cluster*
+ * (a set of subtitles cut for the same video) by how well that cluster's encode
+ * matches the file being played. It is used to pick which cut to anchor on when
+ * the pool contains more than one: the largest cluster is not necessarily the
+ * one that matches the release, and anchoring on the wrong cut labels every
+ * correctly-timed subtitle a mismatch. Symmetric with the weights/penalties
+ * `scoreCandidate` uses, so the two never disagree about what "matches".
+ */
+export function releaseAffinity(p: ParsedRelease, target: ParsedRelease): number {
+  let s = 0;
+  if (target.group && p.group && target.group === p.group) s += WEIGHTS.group;
+  if (target.source && p.source) s += target.source === p.source ? WEIGHTS.source : -MISMATCH_PENALTIES.source;
+  if (target.resolution && p.resolution) {
+    s += target.resolution === p.resolution ? WEIGHTS.resolution : -MISMATCH_PENALTIES.resolution;
+  }
+  if (target.videoCodec && p.videoCodec) {
+    s += target.videoCodec === p.videoCodec ? WEIGHTS.videoCodec : -MISMATCH_PENALTIES.videoCodec;
+  }
+  if (target.year !== undefined && p.year === target.year) s += WEIGHTS.year;
+  return s;
 }
 
 function normalise(s: string): string {

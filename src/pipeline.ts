@@ -5,7 +5,7 @@ import type { Config } from './config.js';
 import { buildLabel, buildRowLabel } from './label/label.js';
 import { parseRelease } from './parse/release.js';
 import { detectForced, isForced } from './parse/forced.js';
-import { applyTimingScore, rank, scoreAll } from './score/score.js';
+import { applyTimingScore, rank, releaseAffinity, scoreAll } from './score/score.js';
 import type { Candidate, ParsedRelease, RawSubtitle, RequestExtras } from './types.js';
 import { DEFAULT_FETCH_OPTIONS, fetchAndInspect, withAlignment } from './verify/fetch.js';
 import { align, isTrustworthy, type Timeline } from './verify/cues.js';
@@ -80,6 +80,68 @@ export function identityReference(identityTimelines: Timeline[]): Timeline | nul
   return reference.length >= MIN_USABLE_CUES ? reference : null;
 }
 
+/** A verified candidate reduced to the two things cut-selection needs. */
+export interface Cut {
+  parsed: ParsedRelease;
+  timeline: Timeline;
+}
+
+/**
+ * The timing reference chosen by release match rather than by popularity.
+ *
+ * `consensusTimeline` anchors on the medoid — the largest cluster of agreeing
+ * timelines. That is right only when the majority of uploaded subtitles are cut
+ * for the video being played. When they are not, it anchors on the wrong cut
+ * and penalises every correctly-timed file. Eternals is the worked case: 7 of
+ * 10 English subtitles are timed for an x265/WEB cut that runs ~69s long on the
+ * x264 BluRay release actually playing, so the medoid is the wrong cut and the
+ * 3 subtitles that match the file lose.
+ *
+ * Instead: split the verified timelines into cuts (clusters that agree with
+ * each other), rate each cut by how well its encode matches the target release,
+ * and anchor on the best-matching cut. Returns null when the release cannot
+ * distinguish the cuts (no encode signal, or a tie), so the caller falls back
+ * to the ordinary medoid and nothing regresses on titles with one cut or with
+ * uninformative release names.
+ */
+export function releaseMatchedReference(cuts: Cut[], target: ParsedRelease): Consensus | null {
+  const usable = cuts.filter((c) => c.timeline.length >= MIN_USABLE_CUES);
+  if (usable.length < 2) return null;
+
+  // Greedy single-link clustering: a timeline joins the first cluster whose
+  // representative it agrees with at rate 1, else it starts its own.
+  const clusters: Cut[][] = [];
+  for (const c of usable) {
+    let placed = false;
+    for (const cl of clusters) {
+      const a = align(c.timeline, cl[0]!.timeline, { rates: [1], maxOffset: 30 });
+      if (a.agreement >= SAME_CUT_AGREEMENT) {
+        cl.push(c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) clusters.push([c]);
+  }
+  if (clusters.length < 2) return null; // one cut only — nothing to choose between
+
+  const scored = clusters
+    .map((cl) => ({
+      cl,
+      affinity: Math.max(...cl.map((c) => releaseAffinity(c.parsed, target))),
+    }))
+    .sort((a, b) => b.affinity - a.affinity || b.cl.length - a.cl.length);
+
+  const best = scored[0]!;
+  const second = scored[1]!;
+  // Only override the medoid when the release points clearly at one cut, and
+  // that cut is a real cluster (≥2 agreeing files) rather than a lone outlier.
+  if (best.affinity <= second.affinity) return null;
+  if (best.cl.length < 2) return null;
+
+  return consensusTimeline(best.cl.map((c) => c.timeline));
+}
+
 export function consensusTimeline(timelines: Timeline[]): Consensus {
   const usable = timelines.filter((t) => t.length >= 5);
   if (usable.length === 0) return { reference: timelines[0] ?? [], support: 0 };
@@ -117,6 +179,7 @@ async function verifyTop(
   candidates: Candidate[],
   limit: number,
   timeoutMs: number,
+  target: ParsedRelease,
 ): Promise<Candidate[]> {
   const top = candidates.slice(0, limit);
   const rest = candidates.slice(limit);
@@ -138,9 +201,19 @@ async function verifyTop(
   // the reference and the wrong arc is what gets penalised instead.
   const identityAlive = alive.filter((f) => f.c.identity);
   const identityAnchor = identityReference(identityAlive.map((f) => f.result.timeline));
+  // Prefer an identity (episode/arc) anchor; then the release-matched cut when
+  // the pool holds more than one cut and the release tells them apart; then the
+  // plain medoid. The middle step is what stops the largest-but-wrong cut from
+  // winning when a correctly-timed minority exists (see releaseMatchedReference).
+  const relMatched = identityAnchor
+    ? null
+    : releaseMatchedReference(
+        alive.map((f) => ({ parsed: f.c.parsed, timeline: f.result.timeline })),
+        target,
+      );
   const { reference, support } = identityAnchor
     ? { reference: identityAnchor, support: 1 }
-    : consensusTimeline(alive.map((f) => f.result.timeline));
+    : (relMatched ?? consensusTimeline(alive.map((f) => f.result.timeline)));
 
   // With no majority behind the anchor there is nothing to measure against, so
   // report timings as unknown rather than inventing corrections from noise.
@@ -269,7 +342,7 @@ export async function runPipeline(
   let ordered = rank(scored);
 
   if (config.verify && ordered.length > 0) {
-    let checked = await verifyTop(ordered, config.verifyLimit, config.verifyTimeoutMs);
+    let checked = await verifyTop(ordered, config.verifyLimit, config.verifyTimeoutMs, target);
 
     if (config.demoteForced) {
       // A forced track covers signs only. It is not wrong, it is simply not

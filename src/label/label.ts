@@ -47,7 +47,11 @@ function timingNote(c: Candidate): string | undefined {
   if (v.offset !== undefined && Math.abs(v.offset) >= 1) {
     return `${v.offset > 0 ? '+' : ''}${v.offset.toFixed(1)}s`;
   }
-  if (v.agreement >= 0.6) return 'in sync';
+  // "matched", not "in sync": agreement is measured against the chosen
+  // reference cut, not against the video. When the file's hash was matched we
+  // can say more, but a timeline agreement only says this file matches the cut
+  // we anchored on — which is a release match, not a verified-against-video one.
+  if (v.agreement >= 0.6) return 'matched';
   return undefined;
 }
 
@@ -105,7 +109,7 @@ export function buildRowLabel(c: Candidate, index: number, total: number): strin
   } else if (c.reasons.includes('timing corrected')) {
     notes.push('sync fixed');
   } else if (c.reasons.includes('timing confirmed')) {
-    notes.push('in sync');
+    notes.push('matched');
   }
 
   const tail = notes.length > 0 ? ` (${notes.join(', ')})` : '';

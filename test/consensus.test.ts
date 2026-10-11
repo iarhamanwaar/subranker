@@ -108,3 +108,51 @@ describe('identityReference', () => {
     expect(ref).toBe(base);
   });
 });
+
+describe('releaseMatchedReference', () => {
+  it('anchors on the release-matching cut even when it is the minority', async () => {
+    const { releaseMatchedReference } = await import('../src/pipeline.js');
+    const { parseRelease } = await import('../src/parse/release.js');
+    const target = await parseRelease('Eternals.2021.1080p.BluRay.1600MB.DD5.1.x264-GalaxyRG.mkv');
+
+    // Irregular gaps like real dialogue, so a 69s shift does not alias onto
+    // neighbouring cues (evenly-spaced cues would).
+    let acc = 25;
+    const base = Array.from({ length: 150 }, (_, i) => (acc += 2 + ((i * 37) % 13)));
+    const shifted = base.map((t) => t + 69); // a different cut, ~69s long
+
+    // 3 correct (x264 BluRay) vs 4 wrong (x265 / WEB) — the wrong cut is the majority.
+    const cut = async (rel: string, tl: number[]) => ({ parsed: await parseRelease(rel), timeline: tl });
+    const cuts = [
+      await cut('Eternals.2021.1080p.BluRay.x265-YAWNTiC', shifted.map((t) => t + 0.1)),
+      await cut('Eternals.2021.1080p.BluRay.x265-YAWNTiC.SDH', shifted.map((t) => t - 0.1)),
+      await cut('Eternals.2021.1080p.WEB-DL.H.264-EVO', shifted.map((t) => t + 0.2)),
+      await cut('Eternals.2021.2160p.WEB-DL.H.265-EVO', shifted),
+      await cut('Eternals.2021.1080p.BluRay.x264-YTS', base.map((t) => t + 0.1)),
+      await cut('Eternals.2021.1080p.BluRay.x264-YTS.AAC', base.map((t) => t - 0.1)),
+      await cut('Eternals.2021.1080p.BluRay.1080p', base),
+    ];
+
+    const res = releaseMatchedReference(cuts, target);
+    expect(res).not.toBeNull();
+    // The chosen reference must be the GalaxyRG (0s) cut, not the +69s majority.
+    expect(res!.reference[0]!).toBeLessThan(50);
+  });
+
+  it('returns null when the release cannot tell the cuts apart', async () => {
+    const { releaseMatchedReference } = await import('../src/pipeline.js');
+    const { parseRelease } = await import('../src/parse/release.js');
+    const target = await parseRelease('Movie.2020.1080p.BluRay.x264-GRP.mkv');
+    let acc = 30;
+    const base = Array.from({ length: 120 }, (_, i) => (acc += 3 + ((i * 29) % 11)));
+    const shifted = base.map((t) => t + 40);
+    const none = { sdh: false, dub: false, parser: 'none' as const, confidence: 0 };
+    const cuts = [
+      { parsed: none, timeline: base },
+      { parsed: none, timeline: base.map((t) => t + 0.1) },
+      { parsed: none, timeline: shifted },
+      { parsed: none, timeline: shifted.map((t) => t - 0.1) },
+    ];
+    expect(releaseMatchedReference(cuts, target)).toBeNull();
+  });
+});

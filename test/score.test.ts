@@ -257,3 +257,27 @@ describe('language preference', () => {
     expect(ranked).toHaveLength(1);
   });
 });
+
+describe('videoCodec mismatch penalty', () => {
+  it('ranks an x264 sub above an x265 sub for an x264 target, all else equal', async () => {
+    const target = await parseRelease('Eternals.2021.1080p.BluRay.x264-GalaxyRG.mkv');
+    const cands = [
+      await candidate('Eternals.2021.1080p.BluRay.x265-YAWNTiC'),
+      await candidate('Eternals.2021.1080p.BluRay.x264-YTS'),
+    ];
+    const ranked = rank(scoreAll(cands, target, {}));
+    expect(ranked[0]?.parsed.videoCodec).toBe('x264');
+  });
+});
+
+describe('releaseAffinity', () => {
+  it('scores a matching encode above a mismatching one', async () => {
+    const target = await parseRelease('Eternals.2021.1080p.BluRay.x264-GalaxyRG.mkv');
+    const { releaseAffinity } = await import('../src/score/score.js');
+    const x264 = await parseRelease('Eternals.2021.1080p.BluRay.x264-YTS');
+    const x265 = await parseRelease('Eternals.2021.1080p.BluRay.x265-YAWNTiC');
+    const web = await parseRelease('Eternals.2021.1080p.WEB-DL.H.264-EVO');
+    expect(releaseAffinity(x264, target)).toBeGreaterThan(releaseAffinity(x265, target));
+    expect(releaseAffinity(x264, target)).toBeGreaterThan(releaseAffinity(web, target));
+  });
+})
