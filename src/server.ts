@@ -170,6 +170,17 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
     if (subdlSearches.day !== today) subdlSearches = { day: today, count: 0 };
     return subdlSearches.count < SUBDL_SEARCH_CAP;
   };
+  // The OpenSubtitles imdb-id search fires on every movie request, and the id is
+  // fully caller-controlled, so a stream of distinct ids would otherwise drive
+  // unbounded searches against the paid key (the hash search is naturally gated
+  // by a hash being present; this one is not). Cap it per day, same as SubDL.
+  let osSearches = { day: '', count: 0 };
+  const OS_SEARCH_CAP = 500;
+  const osSearchLeft = (): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (osSearches.day !== today) osSearches = { day: today, count: 0 };
+    return osSearches.count < OS_SEARCH_CAP;
+  };
 
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, {
@@ -444,7 +455,8 @@ export function createApp(base: Config, deps: { watchOrder?: WatchOrderStore } =
       const mid = !sid ? parseMovieId(parsed.id) : null;
       if (mid && config.publicUrl) {
         const now = Date.now();
-        if (config.opensubtitlesApiKey) {
+        if (config.opensubtitlesApiKey && osSearchLeft()) {
+          osSearches.count += 1;
           const osSubs = await searchByImdb({
             apiKey: config.opensubtitlesApiKey,
             imdbId: mid.imdbId,
