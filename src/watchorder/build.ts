@@ -98,10 +98,11 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
   for (const f of franchises) {
     const started = Date.now();
     const videos = await expand(f, get, today);
-    const poster = f.posterFile
-      ? await image(['posterfile', f.posterFile], 'png', async () => ({
-          buf: readFileSync(new URL(`../../assets/${f.posterFile}`, import.meta.url)), final: true,
-        }))
+    const posterBuf = f.posterFile ? readFileSync(new URL(`../../assets/${f.posterFile}`, import.meta.url)) : undefined;
+    const poster = posterBuf
+      // Key on the file's bytes, not its name: editing the poster in place must
+      // produce a new image name so clients and the store pick it up.
+      ? await image(['posterfile', createHash('sha1').update(posterBuf).digest('hex')], 'png', async () => ({ buf: posterBuf, final: true }))
       : await image(['poster', f.poster, patterns(f)], 'jpg', async () => {
           const src = await fetchImage(f.poster);
           if (!('buf' in src)) throw new Error(`${f.id}: poster unavailable`);
