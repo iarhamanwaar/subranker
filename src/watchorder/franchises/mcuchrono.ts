@@ -5,13 +5,15 @@ const saga = (num: string, name: string, color: string): Group => ({ num, name, 
 
 /**
  * Rotten Tomatoes' "MCU Chronological Watch Order: Movies and Disney+ Shows"
- * (editorial.rottentomatoes.com/guide/marvel-movies-in-order/), reproduced
- * exactly: every one of its 82 entries, in its in-universe order, including the
- * Marvel One-Shots, Item 47 and the Netflix street-level shows.
+ * (editorial.rottentomatoes.com/guide/marvel-movies-in-order/), in its
+ * in-universe order, including the Netflix street-level shows. RT's four
+ * stream-less entries are dropped — the Marvel One-Shots (Agent Carter, Thor's
+ * Hammer, The Consultant) and Item 47, which resolve as metadata but have no
+ * streams on any provider, so their cards would never play.
  *
  * The three seasons are contiguous slices of that same list — navigation jump
  * points, not a re-ordering. Nothing is moved: RT's own position is shown as
- * "#N of 82", which is the real watch sequence. Shows RT places at several
+ * "#N of N", which is the real watch sequence. Shows RT places at several
  * points (Daredevil, Jessica Jones, Loki, What If…?, Born Again) are split by
  * season exactly where RT lists each one. Titles not out yet (VisionQuest,
  * later Avengers films) appear by themselves once a rebuild sees them released.
@@ -21,7 +23,7 @@ export const mcuChrono: Franchise = {
   name: 'MCU · Chronological (RT)',
   style: 'mcu',
   releaseInfo: 'Timeline',
-  description: "Rotten Tomatoes' full chronological MCU timeline — all 82 films and shows in in-universe order, including the One-Shots and the Netflix series. Seasons are the two Sagas plus the earliest-set titles; #N of 82 is RT's own order.",
+  description: "Rotten Tomatoes' chronological MCU timeline — every film and show in in-universe order, including the Netflix series (the stream-less One-Shots and Item 47 dropped). Seasons are the two Sagas plus the earliest-set titles; #N is RT's own order.",
   poster: 'https://images.metahub.space/poster/medium/tt4154796/img',
   background: 'https://images.metahub.space/background/medium/tt4154796/img',
   logo: { accent: 'MCU', rest: 'Chronological' },
@@ -34,7 +36,6 @@ export const mcuChrono: Franchise = {
     [1, [
       { series: 'tt13968252', seasons: [1], title: 'Eyes of Wakanda' },
       { movie: 'tt0458339', title: 'Captain America: The First Avenger', short: 'The First Avenger' },
-      { movie: 'tt3067038', title: 'Marvel One-Shot: Agent Carter', short: 'One-Shot: Agent Carter' },
       { series: 'tt3475734', seasons: [1, 2], title: 'Agent Carter' },
       { movie: 'tt10676052', title: 'The Fantastic Four: First Steps', short: 'Fantastic Four' },
       { movie: 'tt4154664', title: 'Captain Marvel' },
@@ -43,11 +44,8 @@ export const mcuChrono: Franchise = {
       { movie: 'tt0371746', title: 'Iron Man' },
       { movie: 'tt1228705', title: 'Iron Man 2' },
       { movie: 'tt0800080', title: 'The Incredible Hulk' },
-      { movie: 'tt2011109', title: "Marvel One-Shot: A Funny Thing Happened on the Way to Thor's Hammer", short: "One-Shot: Thor's Hammer" },
       { movie: 'tt0800369', title: 'Thor' },
-      { movie: 'tt2011118', title: 'Marvel One-Shot: The Consultant', short: 'One-Shot: The Consultant' },
       { movie: 'tt0848228', title: 'The Avengers' },
-      { movie: 'tt2247732', title: 'Marvel One-Shot: Item 47', short: 'One-Shot: Item 47' },
       { movie: 'tt1981115', title: 'Thor: The Dark World', short: 'The Dark World' },
       { movie: 'tt1300854', title: 'Iron Man 3' },
       { movie: 'tt1843866', title: 'Captain America: The Winter Soldier', short: 'The Winter Soldier' },
