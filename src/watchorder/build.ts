@@ -98,11 +98,15 @@ export async function build(opts: { dir: string; publicUrl: string; today?: stri
   for (const f of franchises) {
     const started = Date.now();
     const videos = await expand(f, get, today);
-    const poster = await image(['poster', f.poster, patterns(f)], 'jpg', async () => {
-      const src = await fetchImage(f.poster);
-      if (!('buf' in src)) throw new Error(`${f.id}: poster unavailable`);
-      return { buf: await renderPoster({ image: src.buf, patterns: patterns(f) }), final: true };
-    });
+    const poster = f.posterFile
+      ? await image(['posterfile', f.posterFile], 'png', async () => ({
+          buf: readFileSync(new URL(`../../assets/${f.posterFile}`, import.meta.url)), final: true,
+        }))
+      : await image(['poster', f.poster, patterns(f)], 'jpg', async () => {
+          const src = await fetchImage(f.poster);
+          if (!('buf' in src)) throw new Error(`${f.id}: poster unavailable`);
+          return { buf: await renderPoster({ image: src.buf, patterns: patterns(f) }), final: true };
+        });
     const logoSpec = f.logo;
     const logo = typeof logoSpec === 'string' ? logoSpec
       : imgUrl(await image(['logo', logoSpec], 'png', async () => ({ buf: await renderLogo(logoSpec), final: true })));

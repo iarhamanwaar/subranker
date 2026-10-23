@@ -25,6 +25,8 @@ export const mcuChrono: Franchise = {
   // Loki (the TVA / timeline) art, so the chronological card reads differently
   // from the Endgame-based release-order MCU card.
   poster: 'https://images.metahub.space/poster/medium/tt9140554/img',
+  // Custom "Temporal Vault" poster (Marvel banner + TVA clock + MCU title).
+  posterFile: 'posters/mcuchrono.png',
   background: 'https://images.metahub.space/background/medium/tt9140554/img',
   logo: { accent: 'MCU', rest: 'Chronological' },
   groups: {

@@ -139,6 +139,8 @@ export interface Franchise {
   releaseInfo: string;
   description: string;
   poster: string;
+  /** A finished poster bundled in assets/ (used as-is, no WATCH ORDER band). */
+  posterFile?: string;
   background: string;
   /** A logo image URL, or text to render as one. */
   logo: string | { accent: string; rest: string; color?: string };
